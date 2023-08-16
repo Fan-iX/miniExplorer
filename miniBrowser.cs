@@ -10,6 +10,7 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using Microsoft.VisualBasic.FileIO;
 using ShellApp;
+using System.Reflection;
 
 public static class FileSizeHelper
 {
@@ -223,6 +224,7 @@ namespace miniExplorer
 
         public miniBrowser()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(miniBrowser));
             miniSize = Properties.Settings.Default.MiniSize;
             fullSize = Properties.Settings.Default.FullSize;
             bool isFirstRun = Properties.Settings.Default.FirstRun;
@@ -244,6 +246,10 @@ namespace miniExplorer
             {
                 this.dirPath = NativeMethods.GetDownloadFolderPath();
             }
+            else if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
+            {
+                this.dirPath = Environment.GetCommandLineArgs()[1];
+            }
             else
             {
                 this.dirPath = Properties.Settings.Default.LastDirPath;
@@ -256,6 +262,10 @@ namespace miniExplorer
             this.AutoScaleMode = AutoScaleMode.Dpi;
             this.dpiScale = new DpiFactor(this.DeviceDpi / 96.0f);
             this.MinimumSize = new Size(75 * dpiScale, 75 * this.dpiScale);
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("miniExplorer.Resources.miniExplorer.ico"))
+            {
+                this.Icon = new Icon(stream);
+            }
 
             tb = new TextBox()
             {
