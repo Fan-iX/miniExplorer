@@ -279,6 +279,7 @@ namespace miniExplorer
             {
                 View = View.Details,
                 AllowDrop = true,
+                LabelEdit = true,
                 // FullRowSelect = true,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
                 Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale),
@@ -311,6 +312,7 @@ namespace miniExplorer
             lv.KeyDown += new KeyEventHandler(lv_KeyDown);
             lv.MouseClick += new MouseEventHandler(lv_MouseClick);
             lv.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
+            lv.AfterLabelEdit += new LabelEditEventHandler(lv_AfterLabelEdit);
 
             this.MouseDown += new MouseEventHandler(form_MouseDown);
             this.ResizeEnd += new EventHandler(form_ResizeEnd);
@@ -494,21 +496,22 @@ namespace miniExplorer
             ListView lv = sender as ListView;
             Point point = lv.PointToClient(new Point(e.X, e.Y));
             ListViewItem item = lv.GetItemAt(point.X, point.Y);
-            string fullPath = item == null ? this.dirPath : (string)item.SubItems[0].Tag;
-            if (!Directory.Exists(fullPath)) return;
+            string destinationDirectory = item == null ? this.dirPath : (string)item.SubItems[0].Tag;
+            if (!Directory.Exists(destinationDirectory)) return;
             lv.SelectedItems.Clear();
             if (item != null) item.Selected = true;
-            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-            foreach (string file in files)
+            string[] sourceNames = (string[])e.Data.GetData(DataFormats.FileDrop);
+            foreach (string sourceName in sourceNames)
             {
-                if (File.Exists(file))
+                string destinationName = Path.Combine(destinationDirectory, Path.GetFileName(sourceName));
+                if (File.Exists(sourceName))
                 {
-                    FileSystem.MoveFile(file, Path.Combine(fullPath, Path.GetFileName(file)), UIOption.AllDialogs);
+                    FileSystem.MoveFile(sourceName, destinationName, UIOption.AllDialogs);
                 }
-                if (Directory.Exists(file))
+                if (Directory.Exists(sourceName))
                 {
                     watcher.EnableRaisingEvents = false;
-                    FileSystem.MoveDirectory(file, Path.Combine(fullPath, Path.GetFileName(file)), UIOption.AllDialogs);
+                    FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs);
                     refreshList();
                     watcher.EnableRaisingEvents = true;
                 }
@@ -643,6 +646,68 @@ DpiChangedEventArgs e)
             }
         }
 
+        private void lv_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            ListViewItem focusedItem = lv.FocusedItem;
+            if (e.Label == null) return;
+            string sourceName = (string)focusedItem.SubItems[0].Tag;
+            string destinationName = Path.Combine(this.dirPath, e.Label);
+            if (sourceName != destinationName)
+            {
+                if (File.Exists(sourceName))
+                {
+                    if (Directory.Exists(destinationName))
+                        MessageBox.Show("指定的文件名与已存在的文件夹重名。请指定其他名称。", "重命名文件");
+                    else
+                    {
+                        FileSystem.MoveFile(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
+                        if (File.Exists(sourceName))
+                            e.CancelEdit = true;
+                        else
+                            focusedItem.SubItems[0].Tag = destinationName;
+                    }
+                }
+                else if (Directory.Exists(sourceName))
+                {
+                    if (File.Exists(destinationName))
+                        MessageBox.Show("指定的文件夹名与已存在的文件重名。请指定其他名称。", "重命名文件夹");
+                    else if (!Directory.Exists(destinationName))
+                    {
+                        watcher.EnableRaisingEvents = false;
+                        FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
+                        if (Directory.Exists(sourceName))
+                            e.CancelEdit = true;
+                        else
+                            focusedItem.SubItems[0].Tag = destinationName;
+                        watcher.EnableRaisingEvents = true;
+                    }
+                    else if (
+                            MessageBox.Show(
+$@"此目标已包含名为“{e.Label}”的文件夹。
+如果任何文件使用相同的名称，将会询问你是否要替换这些文件。
+你仍然将文件夹{sourceName}
+与文件夹{destinationName}
+合并吗？",
+                                "确认文件夹替换",
+                                MessageBoxButtons.YesNo,
+                                MessageBoxIcon.Question
+                            ) == DialogResult.Yes
+                        )
+                    {
+                        watcher.EnableRaisingEvents = false;
+                        FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
+                        e.CancelEdit = true;
+                        if (!Directory.Exists(sourceName))
+                            lv.Items.Remove(focusedItem);
+                        watcher.EnableRaisingEvents = true;
+                    }else{
+                        e.CancelEdit = true;
+                    }
+                }
+            }
+        }
+
         private void lv_KeyDown(object sender, KeyEventArgs e)
         {
             ListView lv = sender as ListView;
@@ -660,24 +725,21 @@ DpiChangedEventArgs e)
                 foreach (ListViewItem item in lv.SelectedItems)
                 {
                     string fullPath = (string)item.SubItems[0].Tag;
-                    try
+                    if (e.Shift)
                     {
-                        if (e.Shift)
-                        {
-                            if (File.Exists(fullPath))
-                                FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently);
-                            else if (Directory.Exists(fullPath))
-                                FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently);
-                        }
-                        else
-                        {
-                            if (File.Exists(fullPath))
-                                FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin);
-                            else if (Directory.Exists(fullPath))
-                                FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin);
-                        }
+                        if (File.Exists(fullPath))
+                            FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently, UICancelOption.DoNothing);
+                        else if (Directory.Exists(fullPath))
+                            FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently, UICancelOption.DoNothing);
                     }
-                    catch (OperationCanceledException) { }
+                    else
+                    {
+                        if (File.Exists(fullPath))
+                            FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.DoNothing);
+                        else if (Directory.Exists(fullPath))
+                            FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.DoNothing);
+                    }
+
                 }
             }
         }
