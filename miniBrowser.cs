@@ -72,7 +72,10 @@ public class NativeMethods
     {
         SHFILEINFO info = new SHFILEINFO();
         IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_ICON | SHGFI_SMALLICON);
-        return System.Drawing.Icon.FromHandle(info.hIcon).ToBitmap();
+        if (info.hIcon == (IntPtr)0)
+            return new Bitmap(32, 32);
+        else
+            return Icon.FromHandle(info.hIcon).ToBitmap();
     }
 
     public static string GetDisplayNameFromPath(string pszPath)
@@ -399,8 +402,6 @@ namespace miniExplorer
 
             sc.Panel1.Controls.Add(lvFolder);
             sc.Panel2.Controls.Add(lvFile);
-            refreshList();
-            watcher.EnableRaisingEvents = true;
 
             tb.KeyDown += new KeyEventHandler(tb_KeyDown);
             tb.DragEnter += new DragEventHandler(tb_DragEnter);
@@ -443,12 +444,13 @@ namespace miniExplorer
             this.KeyDown += new KeyEventHandler(form_KeyDown);
             this.Resize += new EventHandler(form_Resize);
             this.DpiChanged += new DpiChangedEventHandler(form_DpiChanged);
-            this.Shown += new EventHandler(form_Shown);
+            this.Load += new EventHandler(form_Load);
 
             this.Controls.Add(tb);
             this.Controls.Add(sc);
             lvFile.Select();
             this.ResumeLayout(false);
+            refreshList();
         }
 
         public void refreshList()
@@ -752,13 +754,13 @@ namespace miniExplorer
             }
         }
 
-        private void form_Shown(object sender, EventArgs e)
+        private void form_Load(object sender, EventArgs e)
         {
             this.Location = Properties.Settings.Default.WindowLocation;
+            watcher.EnableRaisingEvents = true;
         }
 
-        private void form_DpiChanged(object sender,
-DpiChangedEventArgs e)
+        private void form_DpiChanged(object sender, DpiChangedEventArgs e)
         {
             this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
             this.MinimumSize = new Size(75 * dpiScale, 75 * this.dpiScale);
@@ -843,7 +845,6 @@ DpiChangedEventArgs e)
                 Process.Start(new ProcessStartInfo(fullPath) { UseShellExecute = true });
             }
         }
-
 
         private void lvFolder_AfterLabelEdit(object sender, LabelEditEventArgs e)
         {
