@@ -12,136 +12,27 @@ using Microsoft.VisualBasic.FileIO;
 using ShellApp;
 using System.Reflection;
 
-public static class FileSizeHelper
-{
-    static readonly string[] SizeSuffixes = { "B ", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
-    const long byteConversion = 1000;
-    public static string GetHumanReadableFileSize(long value)
-    {
-        if (value == 0) { return "0"; }
-
-        int mag = (int)Math.Log(value, byteConversion);
-        int adjustedSize = (int)(value / Math.Pow(1000, mag));
-
-        return string.Format("{0:d} {1}", adjustedSize, SizeSuffixes[mag]);
-    }
-}
-
-public class NativeMethods
-{
-    public const uint SHGFI_DISPLAYNAME = 0x200;
-    public const uint SHGFI_ICON = 0x100;
-    public const uint SHGFI_LARGEICON = 0x0;
-    public const uint SHGFI_SMALLICON = 0x1;
-    public const uint SHGFI_SYSICONINDEX = 0x4000;
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct SHFILEINFO
-    {
-        public IntPtr hIcon;
-        public int iIcon;
-        public uint dwAttributes;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szDisplayName;
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-        public string szTypeName;
-    };
-
-    public static string GetDownloadFolderPath()
-    {
-        return SHGetKnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B"), 0, IntPtr.Zero);
-    }
-    [DllImport("shell32", CharSet = CharSet.Unicode, ExactSpelling = true, PreserveSig = false)]
-    private static extern string SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid rfid,
-                                                                                          uint dwFlags,
-                                                                                          IntPtr hToken);
-
-    [DllImport("user32.dll")]
-    public static extern int SendMessage(IntPtr hWnd, int Msg, int wParam, int lParam);
-    [DllImport("user32.dll")]
-    public static extern bool ReleaseCapture();
-
-    [DllImport("shell32")]
-    public static extern IntPtr SHGetFileInfo(string pszPath,
-                                              uint dwFileAttributes,
-                                              out SHFILEINFO psfi,
-                                              uint cbSizeFileInfo,
-                                              uint uFlags);
-
-    public static Image GetIconFromPath(string pszPath)
-    {
-        SHFILEINFO info = new SHFILEINFO();
-        IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_ICON | SHGFI_SMALLICON);
-        if (info.hIcon == (IntPtr)0)
-            return new Bitmap(32, 32);
-        else
-            return Icon.FromHandle(info.hIcon).ToBitmap();
-    }
-
-    public static string GetDisplayNameFromPath(string pszPath)
-    {
-        SHFILEINFO info = new SHFILEINFO();
-        IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
-        return info.szDisplayName;
-    }
-}
-
-public class FileSystemHelper
-{
-    public static void OperateFileSystemItem(
-        string sourceName,
-        string destinationName,
-        DragDropEffects operationEffect
-    )
-    {
-        UIOption showUI = UIOption.AllDialogs;
-        UICancelOption onUserCancel = UICancelOption.DoNothing;
-        if (operationEffect.HasFlag(DragDropEffects.Move))
-        {
-            if (sourceName == destinationName) return;
-            if (File.Exists(sourceName))
-                FileSystem.MoveFile(sourceName, destinationName, showUI, onUserCancel);
-            else if (Directory.Exists(sourceName))
-                FileSystem.MoveDirectory(sourceName, destinationName, showUI, onUserCancel);
-        }
-        else
-        {
-            if (sourceName == destinationName) destinationName = Path.Combine(
-                Path.GetDirectoryName(sourceName),
-                Path.GetFileNameWithoutExtension(sourceName) + " - Copy" +
-                Path.GetExtension(sourceName)
-            );
-            if (File.Exists(sourceName))
-                FileSystem.CopyFile(sourceName, destinationName, showUI, onUserCancel);
-            else if (Directory.Exists(sourceName))
-                FileSystem.CopyDirectory(sourceName, destinationName, showUI, onUserCancel);
-        }
-    }
-
-    public static void DeleteFileSystemItem(
-        string itemName,
-        RecycleOption recycle
-    )
-    {
-        UIOption showUI = UIOption.AllDialogs;
-        UICancelOption onUserCancel = UICancelOption.DoNothing;
-        if (File.Exists(itemName))
-            FileSystem.DeleteFile(itemName, showUI, recycle, onUserCancel);
-        else if (Directory.Exists(itemName))
-            FileSystem.DeleteDirectory(itemName, showUI, recycle, onUserCancel);
-    }
-}
-
 public class ListViewWithoutScrollBar : ListView
 {
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
+    public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Auto)]
+    public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
+
+    const int GWL_STYLE = -16;
+    const int WM_NCCALCSIZE = 0x83;
+    const int WS_VSCROLL = 0x200000;
+    const int WS_HSCROLL = 0x100000;
+
     protected override void WndProc(ref Message m)
     {
         switch (m.Msg)
         {
-            case 0x83: // WM_NCCALCSIZE
+            case WM_NCCALCSIZE:
                 int style = (int)GetWindowLongPtr64(this.Handle, GWL_STYLE);
                 if ((style & WS_HSCROLL) == WS_HSCROLL)
-                    style = style & ~WS_HSCROLL;
+                    style &= ~WS_HSCROLL;
                 SetWindowLongPtr64(this.Handle, GWL_STYLE, style);
                 base.WndProc(ref m);
                 break;
@@ -150,15 +41,6 @@ public class ListViewWithoutScrollBar : ListView
                 break;
         }
     }
-    const int GWL_STYLE = -16;
-    const int WS_VSCROLL = 0x200000;
-    const int WS_HSCROLL = 0x100000;
-
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
-    public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Auto)]
-    public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
 }
 
 public class DirectoryListViewColumnSorter : IComparer
@@ -235,31 +117,10 @@ public class FileListViewColumnSorter : IComparer
 
 namespace miniExplorer
 {
-    class DpiFactor
-    {
-        private float scaling;
-        public DpiFactor(float scale)
-        {
-            scaling = scale;
-        }
-        public static int operator *(int pt, DpiFactor factor)
-        {
-            return (int)(pt * factor.scaling);
-        }
-    }
     public partial class miniBrowser : Form
     {
-        // protected override CreateParams CreateParams {
-        //     get {
-        //         CreateParams param = base.CreateParams;
-        //         // param.ExStyle |= 0x80;
-        //         return param;
-        //     }
-        // }
-
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            Properties.Settings.Default.MiniSize = this.miniSize;
             Properties.Settings.Default.FullSize = this.fullSize;
             Properties.Settings.Default.LastDirPath = this.dirPath;
             Properties.Settings.Default.WindowLocation = this.Location;
@@ -267,6 +128,34 @@ namespace miniExplorer
             Properties.Settings.Default.Save();
             base.OnFormClosing(e);
             watcher.Dispose();
+        }
+        protected override void OnDragLeave(EventArgs e)
+        {
+
+            if (this.ClientRectangle.Contains(this.PointToClient(Control.MousePosition)))
+                return;
+            else
+            {
+                base.OnDragLeave(e);
+            }
+        }
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            this.MinimumSize = new Size(75 * dpiScale, 0);
+            this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
+            tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
+            sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
+            sc.Location = new Point(0, 18 * this.dpiScale);
+            lvFolder.SmallImageList.ImageSize = new Size(
+                16 * this.dpiScale,
+                16 * this.dpiScale
+            );
+            lvFile.SmallImageList.ImageSize = new Size(
+                16 * this.dpiScale,
+                16 * this.dpiScale
+            );
+            refreshList();
         }
 
         private string dirPath;
@@ -278,10 +167,9 @@ namespace miniExplorer
         private ShellContextMenu ctxMnu = new ShellContextMenu();
 
         private Size fullSize;
-        private Size miniSize;
         private DpiFactor dpiScale;
 
-        private bool alwaysOpen = true;
+        private bool windowOpen = true;
 
         protected override void WndProc(ref Message m)
         {
@@ -289,20 +177,24 @@ namespace miniExplorer
             const int WM_NCLBUTTONDBLCLK = 0x00A3;
             const int WM_NCRBUTTONDOWN = 0x00A4;
             const int WM_CONTEXTMENU = 0x007B;
-            if (m.Msg == WM_CONTEXTMENU)
-                m.Result = IntPtr.Zero;
-            else if (m.Msg == WM_NCLBUTTONDBLCLK)
-                ToggleSize();
-            else if (m.Msg == WM_NCRBUTTONDOWN)
-                ToggleSize();
-            else
-                base.WndProc(ref m);
+            switch (m.Msg)
+            {
+                case WM_CONTEXTMENU:
+                    m.Result = IntPtr.Zero;
+                    break;
+                case WM_NCLBUTTONDBLCLK:
+                case WM_NCRBUTTONDOWN:
+                    FormToggleBody();
+                    break;
+                default:
+                    base.WndProc(ref m);
+                    break;
+            }
         }
 
         public miniBrowser()
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(miniBrowser));
-            miniSize = Properties.Settings.Default.MiniSize;
             fullSize = Properties.Settings.Default.FullSize;
             bool isFirstRun = Properties.Settings.Default.FirstRun;
 
@@ -318,7 +210,7 @@ namespace miniExplorer
 
             if (isFirstRun)
             {
-                this.dirPath = NativeMethods.GetDownloadFolderPath();
+                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
             }
             else if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
             {
@@ -329,16 +221,15 @@ namespace miniExplorer
                 this.dirPath = Properties.Settings.Default.LastDirPath;
             }
 
+            this.AllowDrop = true;
             this.ClientSize = fullSize;
             this.FormBorderStyle = FormBorderStyle.SizableToolWindow;
             this.StartPosition = FormStartPosition.WindowsDefaultLocation;
             this.TopMost = true;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
             this.KeyPreview = true;
             this.AutoScaleMode = AutoScaleMode.Dpi;
             this.dpiScale = new DpiFactor(this.DeviceDpi / 96.0f);
-            this.MinimumSize = new Size(75 * dpiScale, 75 * this.dpiScale);
+            this.MinimumSize = new Size(75 * dpiScale, 0);
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("miniExplorer.Resources.miniExplorer.ico"))
             {
                 this.Icon = new Icon(stream);
@@ -406,7 +297,6 @@ namespace miniExplorer
             tb.KeyDown += new KeyEventHandler(tb_KeyDown);
             tb.DragEnter += new DragEventHandler(tb_DragEnter);
             tb.DragDrop += new DragEventHandler(tb_DragDrop);
-            tb.DpiChangedAfterParent += new EventHandler(tb_DpiChangedAfterParent);
 
             sc.DragEnter += new DragEventHandler(sc_DragEnter);
             lvFolder.DragEnter += new DragEventHandler(sc_DragEnter);
@@ -414,9 +304,6 @@ namespace miniExplorer
             sc.DragLeave += new EventHandler(sc_DragLeave);
             lvFolder.DragLeave += new EventHandler(sc_DragLeave);
             lvFile.DragLeave += new EventHandler(sc_DragLeave);
-            sc.DpiChangedAfterParent += new EventHandler(sc_DpiChangedAfterParent);
-            lvFolder.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
-            lvFile.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
 
             sc.MouseDoubleClick += new MouseEventHandler(sc_DoubleClick);
 
@@ -439,11 +326,9 @@ namespace miniExplorer
             lvFile.ColumnClick += new ColumnClickEventHandler(lvFile_ColumnClick);
             lvFile.AfterLabelEdit += new LabelEditEventHandler(lvFile_AfterLabelEdit);
 
-            this.MouseDown += new MouseEventHandler(form_MouseDown);
             this.ResizeEnd += new EventHandler(form_ResizeEnd);
             this.KeyDown += new KeyEventHandler(form_KeyDown);
             this.Resize += new EventHandler(form_Resize);
-            this.DpiChanged += new DpiChangedEventHandler(form_DpiChanged);
             this.Load += new EventHandler(form_Load);
 
             this.Controls.Add(tb);
@@ -452,6 +337,8 @@ namespace miniExplorer
             this.ResumeLayout(false);
             refreshList();
         }
+
+
 
         public void refreshList()
         {
@@ -462,7 +349,7 @@ namespace miniExplorer
             lvFolder.SmallImageList.Images.Clear();
             lvFolder.BeginUpdate();
             string parentPath = Path.GetFullPath(Path.Combine(this.dirPath, ".."));
-            lvFolder.SmallImageList.Images.Add(parentPath, NativeMethods.GetIconFromPath(parentPath));
+            lvFolder.SmallImageList.Images.Add(parentPath, ShellInfoHelper.GetIconFromPath(parentPath));
             item = new ListViewItem("..", parentPath);
             item.SubItems[0].Tag = parentPath;
             item.SubItems.Add(new DirectoryInfo(parentPath).LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
@@ -470,8 +357,8 @@ namespace miniExplorer
 
             foreach (DirectoryInfo folder in dirInfo.GetDirectories().Where(x => (x.Attributes & FileAttributes.Hidden) == 0).OrderByDescending(x => x.LastWriteTime))
             {
-                lvFolder.SmallImageList.Images.Add(folder.FullName, NativeMethods.GetIconFromPath(folder.FullName));
-                item = new ListViewItem(NativeMethods.GetDisplayNameFromPath(folder.FullName), folder.FullName);
+                lvFolder.SmallImageList.Images.Add(folder.FullName, ShellInfoHelper.GetIconFromPath(folder.FullName));
+                item = new ListViewItem(ShellInfoHelper.GetDisplayNameFromPath(folder.FullName), folder.FullName);
                 item.SubItems[0].Tag = folder.FullName;
                 item.SubItems.Add(folder.LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
                 lvFolder.Items.Add(item);
@@ -488,15 +375,15 @@ namespace miniExplorer
             {
                 if (file.Extension == "")
                 {
-                    lvFile.SmallImageList.Images.Add(file.FullName, NativeMethods.GetIconFromPath(file.FullName));
-                    item = new ListViewItem(NativeMethods.GetDisplayNameFromPath(file.FullName), file.FullName);
+                    lvFile.SmallImageList.Images.Add(file.FullName, ShellInfoHelper.GetIconFromPath(file.FullName));
+                    item = new ListViewItem(ShellInfoHelper.GetDisplayNameFromPath(file.FullName), file.FullName);
                 }
                 else
                 {
                     string imageKey = file.Extension;
                     if (!lvFile.SmallImageList.Images.ContainsKey(imageKey))
                     {
-                        lvFile.SmallImageList.Images.Add(imageKey, NativeMethods.GetIconFromPath(file.FullName));
+                        lvFile.SmallImageList.Images.Add(imageKey, ShellInfoHelper.GetIconFromPath(file.FullName));
                     }
                     item = new ListViewItem(file.Name, imageKey);
                 }
@@ -528,38 +415,25 @@ namespace miniExplorer
             refreshList();
         }
 
-        private void form_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                NativeMethods.ReleaseCapture();
-                NativeMethods.SendMessage(this.Handle, 0xA1, 0x2, 0);
-            }
-        }
-
         private void form_Resize(object sender, EventArgs e)
         {
             lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
             lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
-            sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
+            if (this.ClientSize.Height > 75 * dpiScale)
+            {
+                sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
+            }
         }
 
         private void form_ResizeEnd(object sender, EventArgs e)
         {
-            int w, h;
-            if (alwaysOpen)
+            if (windowOpen)
             {
-                fullSize = this.ClientSize;
-                w = Math.Min(fullSize.Width, miniSize.Width);
-                h = Math.Min(fullSize.Height, miniSize.Height);
-                miniSize = new Size(w, h);
+                fullSize = new Size(this.ClientSize.Width, Math.Max(this.ClientSize.Height, 150 * dpiScale));
             }
             else
             {
-                miniSize = this.ClientSize;
-                w = Math.Max(fullSize.Width, miniSize.Width);
-                h = Math.Max(fullSize.Height, miniSize.Height);
-                fullSize = new Size(w, h);
+                fullSize = new Size(this.ClientSize.Width, fullSize.Height);
             }
         }
 
@@ -569,7 +443,7 @@ namespace miniExplorer
             {
                 e.Effect = DragDropEffects.Move;
             }
-            if (!alwaysOpen)
+            if (!windowOpen)
             {
                 this.ClientSize = fullSize;
             }
@@ -579,17 +453,39 @@ namespace miniExplorer
 
         private void sc_DragLeave(object sender, EventArgs e)
         {
-            if (!alwaysOpen)
+            if (!windowOpen)
             {
-                this.ClientSize = miniSize;
+                this.ClientSize = new Size(fullSize.Width, 0);
             }
         }
 
-        public void ToggleSize()
+        private void FormHideBody()
         {
-            alwaysOpen = !alwaysOpen;
-            this.ClientSize = alwaysOpen ? fullSize : miniSize;
-            this.Opacity = alwaysOpen ? 1 : 0.8;
+            this.MaximumSize = new Size(int.MaxValue, 0);
+            sc.Hide();
+            tb.Hide();
+            this.ClientSize = new Size(fullSize.Width, 0);
+        }
+
+        private void FormShowBody()
+        {
+            this.MaximumSize = new Size(0, 0);
+            this.ClientSize = fullSize;
+            sc.Show();
+            tb.Show();
+        }
+
+        public void FormToggleBody()
+        {
+            windowOpen = !windowOpen;
+            if (windowOpen)
+            {
+                FormShowBody();
+            }
+            else
+            {
+                FormHideBody();
+            }
         }
 
         private void tb_DragEnter(object sender, DragEventArgs e)
@@ -760,33 +656,6 @@ namespace miniExplorer
             watcher.EnableRaisingEvents = true;
         }
 
-        private void form_DpiChanged(object sender, DpiChangedEventArgs e)
-        {
-            this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
-            this.MinimumSize = new Size(75 * dpiScale, 75 * this.dpiScale);
-        }
-
-        private void sc_DpiChangedAfterParent(object sender, EventArgs e)
-        {
-            sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
-            sc.Location = new Point(0, 18 * this.dpiScale);
-            refreshList();
-        }
-        private void lv_DpiChangedAfterParent(object sender, EventArgs e)
-        {
-            ListView lv = sender as ListView;
-            lv.SmallImageList.ImageSize = new Size(
-                16 * this.dpiScale,
-                16 * this.dpiScale
-            );
-            refreshList();
-        }
-
-        private void tb_DpiChangedAfterParent(object sender, EventArgs e)
-        {
-            tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
-        }
-
         public void ChangeDirDialog()
         {
             using (FolderBrowserDialog folderDialog = new FolderBrowserDialog())
@@ -801,16 +670,6 @@ namespace miniExplorer
                     refreshList();
                 }
             }
-        }
-
-        private void title_DoubleClick()
-        {
-            ToggleSize();
-        }
-
-        private void title_RightClick()
-        {
-            ChangeDirDialog();
         }
 
         private void sc_DoubleClick(object sender, MouseEventArgs e)
