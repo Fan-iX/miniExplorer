@@ -216,6 +216,8 @@ namespace miniExplorer
             {
                 this.dirPath = Properties.Settings.Default.LastDirPath;
             }
+            if (!Directory.Exists(this.dirPath))
+                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
 
             this.AllowDrop = true;
             this.ClientSize = fullSize;
@@ -311,10 +313,12 @@ namespace miniExplorer
             lvFolder.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
             lvFolder.DragDrop += new DragEventHandler(lv_DragDrop);
             lvFolder.KeyDown += new KeyEventHandler(lv_KeyDown);
+            lvFolder.MouseUp += new MouseEventHandler(lv_MouseUp);
             lvFile.MouseClick += new MouseEventHandler(lv_MouseClick);
             lvFile.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
             lvFile.DragDrop += new DragEventHandler(lv_DragDrop);
             lvFile.KeyDown += new KeyEventHandler(lv_KeyDown);
+            lvFile.MouseUp += new MouseEventHandler(lv_MouseUp);
 
             lvFolder.DragOver += new DragEventHandler(lvFolder_DragOver);
             lvFolder.MouseDoubleClick += new MouseEventHandler(lvFolder_DoubleClick);
@@ -812,6 +816,27 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
                     FileInfo[] arrFI = new FileInfo[1];
                     arrFI[0] = new FileInfo((string)item.SubItems[0].Tag);
                     ctxMnu.ShowContextMenu(arrFI, this.PointToScreen(new Point(e.X, e.Y + 35)));
+                }
+            }
+        }
+
+        private void lv_MouseUp(object sender, MouseEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            if (e.Button == MouseButtons.Right)
+            {
+                if (lv.HitTest(e.Location).Location == ListViewHitTestLocations.None)
+                {
+                    string path = Path.GetDirectoryName(this.dirPath);
+                    if (path == null)
+                    {
+                        ChangeDirDialog();
+                    }
+                    else
+                    {
+                        this.dirPath = path;
+                        refreshForm();
+                    }
                 }
             }
         }

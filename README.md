@@ -24,13 +24,14 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 
 ### Mouse action
 
-|                | double click           | right click           | right double click | drag              | drag file/folder into      |
-|----------------|------------------------|-----------------------|--------------------|-------------------|----------------------------|
-| title bar      | toggle auto fold mode  | toggle auto fold mode | /                  | (move window)     | /                          |
-| address bar    | /                      | /                     | /                  | /                 | change directory           |
-| item `..`      | go to parent directory | /                     | select directory   | /                 | move into parent directory |
-| file item      | open file              | context menu          | /                  | file dragged      | /                          |
-| directory item | goto directory         | context menu          | /                  | directory dragged | move into directory        |
+|                | double click           | right click            | right double click | drag              | drag file/folder into       |
+|----------------|------------------------|------------------------|--------------------|-------------------|-----------------------------|
+| title bar      | toggle auto fold mode  | toggle auto fold mode  | /                  | (move window)     | /                           |
+| address bar    | /                      | /                      | /                  | /                 | change directory            |
+| item `..`      | go to parent directory | /                      | select directory   | /                 | move into parent directory  |
+| file item      | open file              | context menu           | /                  | file dragged      | /                           |
+| directory item | goto directory         | context menu           | /                  | directory dragged | move into directory         |
+| empty area     | /                      | go to parent directory | /                  |                   | move into current directory |
 
 ### Keyboard shortcut
 
