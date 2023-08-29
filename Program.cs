@@ -22,7 +22,43 @@ namespace miniExplorer
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             browser = new miniBrowser();
+            Application.AddMessageFilter(new MouseMoveFilter());
             Application.Run(browser);
+        }
+        public class MouseMoveFilter : IMessageFilter
+        {
+            bool mouseOut = true;
+            #region IMessageFilter Members
+            private const int WM_MOUSELEAVE = 0x02A3;
+            private const int WM_NCMOUSEMOVE = 0x0A0;
+            private const int WM_MOUSEMOVE = 0x0200;
+            private const int WM_NCMOUSELEAVE = 0x2A2;
+
+            public bool PreFilterMessage(ref Message m)
+            {
+                switch (m.Msg)
+                {
+                    case WM_NCMOUSEMOVE:
+                    case WM_MOUSEMOVE:
+                        if (mouseOut)
+                        {
+                            browser.OnMouseEnterWindow();
+                            mouseOut = false;
+                        }
+                        break;
+                    case WM_NCMOUSELEAVE:
+                    case WM_MOUSELEAVE:
+                        if (!browser.Bounds.Contains(Control.MousePosition))
+                        {
+                            browser.OnMouseLeaveWindow();
+                            mouseOut = true;
+                        }
+                        break;
+                }
+                return false;
+            }
+
+            #endregion
         }
     }
 }
