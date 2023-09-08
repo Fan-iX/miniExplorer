@@ -126,6 +126,7 @@ namespace miniExplorer
         private TextBox tb;
         private FileSystemWatcher watcher;
         private ShellContextMenu ctxMnu = new ShellContextMenu();
+        private ContextMenuStrip cms = new ContextMenuStrip();
 
         private Size fullSize;
         private DpiFactor dpiScale;
@@ -314,11 +315,13 @@ namespace miniExplorer
             lvFolder.DragDrop += new DragEventHandler(lv_DragDrop);
             lvFolder.KeyDown += new KeyEventHandler(lv_KeyDown);
             lvFolder.MouseUp += new MouseEventHandler(lv_MouseUp);
+            lvFolder.MouseDown += new MouseEventHandler(lv_MouseDown);
             lvFile.MouseClick += new MouseEventHandler(lv_MouseClick);
             lvFile.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
             lvFile.DragDrop += new DragEventHandler(lv_DragDrop);
             lvFile.KeyDown += new KeyEventHandler(lv_KeyDown);
             lvFile.MouseUp += new MouseEventHandler(lv_MouseUp);
+            lvFile.MouseDown += new MouseEventHandler(lv_MouseDown);
 
             lvFolder.DragOver += new DragEventHandler(lvFolder_DragOver);
             lvFolder.MouseDoubleClick += new MouseEventHandler(lvFolder_DoubleClick);
@@ -453,7 +456,8 @@ namespace miniExplorer
 
         private void form_ResizeEnd(object sender, EventArgs e)
         {
-            fullSize = this.ClientSize;
+            if (sc.Visible)
+                fullSize = this.ClientSize;
         }
 
         private void form_DragEnter(object sender, DragEventArgs e)
@@ -593,7 +597,7 @@ namespace miniExplorer
                     FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, effect);
                 }
             }
-            if (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.X))
+            else if (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.X))
             {
                 DragDropEffects effect = e.KeyCode == Keys.C ? DragDropEffects.Copy : DragDropEffects.Move;
                 StringCollection dropList = new StringCollection();
@@ -616,6 +620,10 @@ namespace miniExplorer
                     else
                         FileSystemHelper.DeleteFileSystemItem(fullPath, RecycleOption.SendToRecycleBin);
                 }
+            }
+            else if (e.Alt && e.KeyCode == Keys.Up)
+            {
+                GoToParentDirectory();
             }
         }
 
@@ -684,6 +692,18 @@ namespace miniExplorer
                     this.dirPath = folderDialog.SelectedPath;
                     refreshForm();
                 }
+            }
+        }
+
+        public void GoToParentDirectory()
+        {
+            string path = Path.GetDirectoryName(this.dirPath);
+            if (path == null)
+                ChangeDirDialog();
+            else
+            {
+                this.dirPath = path;
+                refreshForm();
             }
         }
 
@@ -810,6 +830,7 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
             ListView lv = sender as ListView;
             if (e.Button == MouseButtons.Right)
             {
+                this.Text = lv.HitTest(e.Location).Location.ToString();
                 var item = lv.FocusedItem;
                 if (item != null && item.Bounds.Contains(e.Location))
                 {
@@ -827,16 +848,39 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
             {
                 if (lv.HitTest(e.Location).Location == ListViewHitTestLocations.None)
                 {
-                    string path = Path.GetDirectoryName(this.dirPath);
-                    if (path == null)
+                    cms.Items.Clear();
+                    List<string> paths = ShellApplication.GetExplorerPaths();
+                    foreach (string path in paths)
                     {
-                        ChangeDirDialog();
+                        cms.Items.Add(path, ShellInfoHelper.GetIconFromPath(path), new EventHandler(cms_Click));
                     }
-                    else
-                    {
-                        this.dirPath = path;
-                        refreshForm();
-                    }
+                    ToolStripItem item = cms.Items.Add("跳转到...");
+                    item.Click += new EventHandler(cms_GoTo_Click);
+                    cms.Show(Cursor.Position);
+                }
+            }
+        }
+
+        private void cms_GoTo_Click(object sender, EventArgs e)
+        {
+            ChangeDirDialog();
+        }
+
+        private void cms_Click(object sender, EventArgs e)
+        {
+            ToolStripItem item = sender as ToolStripItem;
+            this.dirPath = item.Text;
+            refreshForm();
+        }
+
+        private void lv_MouseDown(object sender, MouseEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            if (e.Button == MouseButtons.Left && e.Clicks == 2)
+            {
+                if (lv.HitTest(e.Location).Location == ListViewHitTestLocations.None)
+                {
+                    GoToParentDirectory();
                 }
             }
         }

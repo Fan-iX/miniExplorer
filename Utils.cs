@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.VisualBasic.FileIO;
+using System.Collections.Generic;
 
 public static class FileSizeHelper
 {
@@ -118,6 +119,23 @@ public class ShellInfoHelper
         IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
         return info.szDisplayName;
     }
+}
+
+public class ShellApplication{
+    public static List<string> GetExplorerPaths(){
+        object shellApplication = System.Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
+        object windows = shellApplication.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shellApplication, null);
+        int windowCounts = (int) windows.GetType().InvokeMember("Count", System.Reflection.BindingFlags.GetProperty, null, windows, null);
+        List<string> output=new List<string>();
+        for (int i = 0; i < windowCounts; i++){
+            object window = windows.GetType().InvokeMember("Item", System.Reflection.BindingFlags.InvokeMethod, null, windows, new object[] { i });
+            string locationURL = (string) window.GetType().InvokeMember("LocationURL", System.Reflection.BindingFlags.GetProperty, null, window, null);
+            if(locationURL != ""){
+                output.Add(new Uri(locationURL).LocalPath);
+            }
+        };
+        return output;
+    } 
 }
 
 
