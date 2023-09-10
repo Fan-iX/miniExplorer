@@ -353,7 +353,7 @@ namespace miniExplorer
         {
             this.history.Insert(0, this.dirPath);
             this.history = this.history.Distinct().Take(10).ToList();
-            this.dirPath = path;
+            this.dirPath = ShellInfoHelper.GetExactPathName(path);
             refreshForm();
         }
 
@@ -655,7 +655,7 @@ namespace miniExplorer
 
         private void tb_KeyUp(object sender, KeyEventArgs e)
         {
-            if (Directory.Exists(tb.Text) && new Uri(tb.Text.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' })))
+            if (Directory.Exists(tb.Text) && new Uri(Path.GetFullPath(tb.Text.TrimEnd(new char[] { '/', '\\' }))) != new Uri(Path.GetFullPath(this.dirPath.TrimEnd(new char[] { '/', '\\' }))))
             {
                 changeDirectory(Path.GetFullPath(tb.Text));
             }
@@ -856,7 +856,7 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
                     List<string> paths = ShellApplication.GetExplorerPaths().Distinct().ToList();
                     paths.Sort();
                     foreach (string path in paths)
-                        if (new Uri(path.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' })))
+                        if (ShellInfoHelper.GetExactPathName(path) != this.dirPath)
                         {
                             ToolStripItem item = cmsiExpDir.DropDown.Items.Add(
                                 ShellInfoHelper.GetDisplayNameFromPath(path),
