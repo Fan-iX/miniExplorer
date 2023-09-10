@@ -127,6 +127,7 @@ namespace miniExplorer
         private FileSystemWatcher watcher;
         private ShellContextMenu ctxMnu = new ShellContextMenu();
         private ContextMenuStrip cms = new ContextMenuStrip();
+        private ToolStripMenuItem cmsiExpDir;
 
         private Size fullSize;
         private DpiFactor dpiScale;
@@ -295,6 +296,11 @@ namespace miniExplorer
 
             sc.Panel1.Controls.Add(lvFolder);
             sc.Panel2.Controls.Add(lvFile);
+
+            cms.DropShadowEnabled = false;
+            cmsiExpDir = cms.Items.Add("资源管理器窗口") as ToolStripMenuItem;
+            cmsiExpDir.DropDown.DropShadowEnabled = false;
+            cms.Items.Add("跳转到...").Click += new EventHandler(cms_GoTo_Click);
 
             tb.KeyDown += new KeyEventHandler(tb_KeyDown);
             tb.KeyUp += new KeyEventHandler(tb_KeyUp);
@@ -647,7 +653,7 @@ namespace miniExplorer
 
         private void tb_KeyUp(object sender, KeyEventArgs e)
         {
-            if (Directory.Exists(tb.Text) && Path.GetFullPath(tb.Text).TrimEnd('\\') != Path.GetFullPath(dirPath).TrimEnd('\\'))
+            if (Directory.Exists(tb.Text) && new Uri(tb.Text.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' })))
             {
                 this.dirPath = Path.GetFullPath(tb.Text);
                 refreshForm();
@@ -848,14 +854,18 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
             {
                 if (lv.HitTest(e.Location).Location == ListViewHitTestLocations.None)
                 {
-                    cms.Items.Clear();
-                    List<string> paths = ShellApplication.GetExplorerPaths();
+                    cmsiExpDir.DropDown.Items.Clear();
+                    List<string> paths = ShellApplication.GetExplorerPaths().Distinct().Where(x => new Uri(x.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' }))).ToList();
+                    paths.Sort();
                     foreach (string path in paths)
                     {
-                        cms.Items.Add(path, ShellInfoHelper.GetIconFromPath(path), new EventHandler(cms_Click));
+                        ToolStripItem item = cmsiExpDir.DropDown.Items.Add(
+                            ShellInfoHelper.GetDisplayNameFromPath(path),
+                            ShellInfoHelper.GetIconFromPath(path),
+                            new EventHandler(cmsiExpDir_Click)
+                        );
+                        item.ToolTipText = path;
                     }
-                    ToolStripItem item = cms.Items.Add("跳转到...");
-                    item.Click += new EventHandler(cms_GoTo_Click);
                     cms.Show(Cursor.Position);
                 }
             }
@@ -866,10 +876,10 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
             ChangeDirDialog();
         }
 
-        private void cms_Click(object sender, EventArgs e)
+        private void cmsiExpDir_Click(object sender, EventArgs e)
         {
             ToolStripItem item = sender as ToolStripItem;
-            this.dirPath = item.Text;
+            this.dirPath = item.ToolTipText;
             refreshForm();
         }
 
