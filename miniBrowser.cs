@@ -119,20 +119,59 @@ namespace miniExplorer
     }
     public partial class miniBrowser : Form
     {
-        private string dirPath;
-        private SplitContainer sc;
-        private ListViewWithoutScrollBar lvFile;
-        private ListViewWithoutScrollBar lvFolder;
-        private TextBox tb;
-        private FileSystemWatcher watcher;
+        private SplitContainer sc = new SplitContainer()
+        {
+            AllowDrop = true,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
+            Orientation = Orientation.Horizontal,
+            BorderStyle = BorderStyle.None,
+            TabStop = false,
+            SplitterWidth = 3
+        };
+        private ListViewWithoutScrollBar lvFolder = new ListViewWithoutScrollBar()
+        {
+            View = View.Details,
+            AllowDrop = true,
+            LabelEdit = true,
+            // FullRowSelect = true,
+            Dock = DockStyle.Fill,
+            ListViewItemSorter = new DirectoryListViewColumnSorter(),
+            SmallImageList = new ImageList()
+        };
+        private ListViewWithoutScrollBar lvFile = new ListViewWithoutScrollBar()
+        {
+            View = View.Details,
+            AllowDrop = true,
+            LabelEdit = true,
+            // FullRowSelect = true,
+            Dock = DockStyle.Fill,
+            ListViewItemSorter = new FileListViewColumnSorter(),
+            SmallImageList = new ImageList()
+        };
+        private TextBox tb = new TextBox()
+        {
+            AllowDrop = true,
+            AutoSize = false,
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            AutoCompleteMode = AutoCompleteMode.Append,
+            AutoCompleteSource = AutoCompleteSource.CustomSource
+        };
+        private FileSystemWatcher watcher = new FileSystemWatcher()
+        {
+            NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
+            IncludeSubdirectories = false
+        };
         private ShellContextMenu ctxMnu = new ShellContextMenu();
         private ContextMenuStrip cms = new ContextMenuStrip();
         private ToolStripMenuItem cmsiExpDir;
+        private ToolStripMenuItem cmsiHist;
 
+        private string dirPath;
         private Size fullSize;
         private DpiFactor dpiScale;
 
         private bool allowFold = false;
+        private List<string> history = new List<string>();
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
@@ -146,11 +185,8 @@ namespace miniExplorer
             watcher.Dispose();
         }
 
-        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        protected void ResizeControl()
         {
-            base.OnDpiChanged(e);
-            this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
-            if (sc.Visible) this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
             sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
             sc.Location = new Point(0, 18 * this.dpiScale);
@@ -162,6 +198,14 @@ namespace miniExplorer
                 16 * this.dpiScale,
                 16 * this.dpiScale
             );
+        }
+
+        protected override void OnDpiChanged(DpiChangedEventArgs e)
+        {
+            base.OnDpiChanged(e);
+            this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
+            if (sc.Visible) this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
+            ResizeControl();
             if (sc.Visible) refreshForm();
         }
 
@@ -196,30 +240,10 @@ namespace miniExplorer
             fullSize = Properties.Settings.Default.FullSize;
             bool isFirstRun = Properties.Settings.Default.FirstRun;
 
-            watcher = new FileSystemWatcher()
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-                IncludeSubdirectories = false
-            };
             watcher.Created += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Changed += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Deleted += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Renamed += new RenamedEventHandler(watcher_FileInfoChange);
-
-            if (isFirstRun)
-            {
-                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
-            }
-            else if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
-            {
-                this.dirPath = Environment.GetCommandLineArgs()[1];
-            }
-            else
-            {
-                this.dirPath = Properties.Settings.Default.LastDirPath;
-            }
-            if (!Directory.Exists(this.dirPath))
-                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
 
             this.AllowDrop = true;
             this.ClientSize = fullSize;
@@ -236,58 +260,8 @@ namespace miniExplorer
                 this.Icon = new Icon(stream);
             }
 
-            tb = new TextBox()
-            {
-                AllowDrop = true,
-                AutoSize = false,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                Size = new Size(this.ClientSize.Width, 18 * this.dpiScale),
-                AutoCompleteMode = AutoCompleteMode.Append,
-                AutoCompleteSource = AutoCompleteSource.CustomSource
-            };
-
-            sc = new SplitContainer()
-            {
-                AllowDrop = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
-                Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale),
-                Orientation = Orientation.Horizontal,
-                Location = new Point(0, 18 * this.dpiScale),
-                BorderStyle = BorderStyle.None,
-                TabStop = false,
-                SplitterWidth = 3
-            };
-
-            lvFolder = new ListViewWithoutScrollBar()
-            {
-                View = View.Details,
-                AllowDrop = true,
-                LabelEdit = true,
-                // FullRowSelect = true,
-                Dock = DockStyle.Fill,
-                ListViewItemSorter = new DirectoryListViewColumnSorter(),
-                SmallImageList = new ImageList()
-                {
-                    ImageSize = new Size(16 * this.dpiScale, 16 * this.dpiScale)
-                }
-            };
-
             lvFolder.Columns.Add("文件夹", -2, HorizontalAlignment.Left);
             lvFolder.Columns.Add("修改时间", 0, HorizontalAlignment.Left);
-
-            lvFile = new ListViewWithoutScrollBar()
-            {
-                View = View.Details,
-                AllowDrop = true,
-                LabelEdit = true,
-                // FullRowSelect = true,
-                Dock = DockStyle.Fill,
-                ListViewItemSorter = new FileListViewColumnSorter(),
-                SmallImageList = new ImageList()
-                {
-                    ImageSize = new Size(16 * this.dpiScale, 16 * this.dpiScale)
-                }
-            };
 
             lvFile.Columns.Add("文件", -2, HorizontalAlignment.Left);
             lvFile.Columns.Add("类型", 0, HorizontalAlignment.Left);
@@ -298,8 +272,12 @@ namespace miniExplorer
             sc.Panel2.Controls.Add(lvFile);
 
             cms.DropShadowEnabled = false;
-            cmsiExpDir = cms.Items.Add("资源管理器窗口") as ToolStripMenuItem;
+            cmsiExpDir = (ToolStripMenuItem)cms.Items.Add("资源管理器窗口");
             cmsiExpDir.DropDown.DropShadowEnabled = false;
+
+            cmsiHist = (ToolStripMenuItem)cms.Items.Add("历史记录");
+            cmsiHist.DropDown.DropShadowEnabled = false;
+
             cms.Items.Add("跳转到...").Click += new EventHandler(cms_GoTo_Click);
 
             tb.KeyDown += new KeyEventHandler(tb_KeyDown);
@@ -350,6 +328,32 @@ namespace miniExplorer
             this.Controls.Add(sc);
             lvFile.Select();
             this.ResumeLayout(false);
+
+            ResizeControl();
+
+            if (isFirstRun)
+            {
+                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
+            }
+            else if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
+            {
+                this.dirPath = Environment.GetCommandLineArgs()[1];
+            }
+            else
+            {
+                this.dirPath = Properties.Settings.Default.LastDirPath;
+            }
+            if (!Directory.Exists(this.dirPath))
+                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
+
+            changeDirectory(this.dirPath);
+        }
+
+        public void changeDirectory(string path)
+        {
+            this.history.Insert(0, this.dirPath);
+            this.history = this.history.Distinct().Take(10).ToList();
+            this.dirPath = path;
             refreshForm();
         }
 
@@ -520,8 +524,7 @@ namespace miniExplorer
             }
             if (Directory.Exists(path))
             {
-                this.dirPath = path;
-                refreshForm();
+                changeDirectory(path);
             }
         }
 
@@ -639,8 +642,7 @@ namespace miniExplorer
             {
                 if (Directory.Exists(tb.Text))
                 {
-                    this.dirPath = tb.Text;
-                    refreshForm();
+                    changeDirectory(tb.Text);
                 }
                 else
                 {
@@ -655,8 +657,7 @@ namespace miniExplorer
         {
             if (Directory.Exists(tb.Text) && new Uri(tb.Text.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' })))
             {
-                this.dirPath = Path.GetFullPath(tb.Text);
-                refreshForm();
+                changeDirectory(Path.GetFullPath(tb.Text));
             }
         }
 
@@ -695,8 +696,7 @@ namespace miniExplorer
                     folderDialog.SelectedPath[0] != '\\'
                 )
                 {
-                    this.dirPath = folderDialog.SelectedPath;
-                    refreshForm();
+                    changeDirectory(folderDialog.SelectedPath);
                 }
             }
         }
@@ -708,8 +708,7 @@ namespace miniExplorer
                 ChangeDirDialog();
             else
             {
-                this.dirPath = path;
-                refreshForm();
+                changeDirectory(path);
             }
         }
 
@@ -741,8 +740,7 @@ namespace miniExplorer
             }
             else if (e.Button == MouseButtons.Left && Directory.Exists(fullPath))
             {
-                this.dirPath = fullPath;
-                refreshForm();
+                changeDirectory(fullPath);
             }
         }
 
@@ -855,15 +853,26 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
                 if (lv.HitTest(e.Location).Location == ListViewHitTestLocations.None)
                 {
                     cmsiExpDir.DropDown.Items.Clear();
-                    List<string> paths = ShellApplication.GetExplorerPaths().Distinct().Where(x => new Uri(x.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' }))).ToList();
+                    List<string> paths = ShellApplication.GetExplorerPaths().Distinct().ToList();
                     paths.Sort();
                     foreach (string path in paths)
+                        if (new Uri(path.TrimEnd(new char[] { '/', '\\' })) != new Uri(this.dirPath.TrimEnd(new char[] { '/', '\\' })))
+                        {
+                            ToolStripItem item = cmsiExpDir.DropDown.Items.Add(
+                                ShellInfoHelper.GetDisplayNameFromPath(path),
+                                ShellInfoHelper.GetIconFromPath(path),
+                                new EventHandler(cmsiExpDir_Click)
+                            );
+                            item.ToolTipText = path;
+                        }
+                    cmsiHist.DropDown.Items.Clear();
+                    foreach (string path in this.history)
                     {
-                        ToolStripItem item = cmsiExpDir.DropDown.Items.Add(
-                            ShellInfoHelper.GetDisplayNameFromPath(path),
-                            ShellInfoHelper.GetIconFromPath(path),
-                            new EventHandler(cmsiExpDir_Click)
-                        );
+                        ToolStripItem item = cmsiHist.DropDown.Items.Add(
+                                ShellInfoHelper.GetDisplayNameFromPath(path),
+                                ShellInfoHelper.GetIconFromPath(path),
+                                new EventHandler(cmsiExpDir_Click)
+                            );
                         item.ToolTipText = path;
                     }
                     cms.Show(Cursor.Position);
@@ -879,8 +888,7 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
         private void cmsiExpDir_Click(object sender, EventArgs e)
         {
             ToolStripItem item = sender as ToolStripItem;
-            this.dirPath = item.ToolTipText;
-            refreshForm();
+            changeDirectory(item.ToolTipText);
         }
 
         private void lv_MouseDown(object sender, MouseEventArgs e)
