@@ -423,13 +423,13 @@ namespace miniExplorer
         {
             FileSystemWatcher watcher = sender as FileSystemWatcher;
             watcher.EnableRaisingEvents = false;
-            refreshForm();
+            if(sc.Visible) refreshForm();
             watcher.EnableRaisingEvents = true;
         }
 
         private void watcher_FileInfoChange(object sender, RenamedEventArgs e)
         {
-            refreshForm();
+            if(sc.Visible) refreshForm();
         }
 
         private void form_Resize(object sender, EventArgs e)
