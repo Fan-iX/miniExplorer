@@ -129,7 +129,10 @@ public class ShellInfoHelper
                 GetExactPathName(di.Parent.FullName), 
                 di.Parent.GetFileSystemInfos(di.Name)[0].Name);
         } else {
-            return di.Name.ToUpper();
+            if(di.FullName.StartsWith("\\\\")||di.FullName.StartsWith("//"))
+                return Path.GetPathRoot(di.FullName);
+            else
+                return di.Name.ToUpper();
         }
     }
 }
