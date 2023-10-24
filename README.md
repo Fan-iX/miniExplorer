@@ -46,3 +46,4 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 | `Delete`         | move item to recycle bin                    |
 | `Alt + Up`       | go to parent directory                      |
 | `Shift + Delete` | remove item (permanently, will show dialog) |
+| `F2`             | start renaming                              |

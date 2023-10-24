@@ -632,11 +632,15 @@ namespace miniExplorer
             {
                 GoToParentDirectory();
             }
+            else if(e.KeyCode == Keys.F2 && lv.SelectedItems.Count > 0)
+            {
+                lv.SelectedItems[0].BeginEdit();
+            }
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (keyData == Keys.Tab)
+            if (keyData == Keys.Tab&&tb.Focused)
             {
                 string target = this.dirPath;
 
@@ -675,13 +679,17 @@ namespace miniExplorer
                 tb.SelectionStart = tb.Text.Length - textRemain.Length;
                 return true;
             }
-            if (keyData == Keys.Enter)
+            if (keyData == Keys.Enter&&tb.Focused)
             {
                 if (Directory.Exists(tb.Text))
                 {
                     string text = tb.Text.Substring(0, tb.SelectionStart);
                     this.dirPath = tb.Text;
-                    tb.SelectionStart = Path.GetFullPath(text).Length;
+                    if(!text.EndsWith(":")&&(File.Exists(text)||Directory.Exists(text))){
+                        tb.SelectionStart = Path.GetFullPath(text).Length;
+                    }else{
+                        tb.SelectionStart = text.Length;
+                    }
                 }
                 else
                 {
