@@ -15,118 +15,50 @@ using System.Reflection;
 
 namespace miniExplorer
 {
-    public class ListViewWithoutScrollBar : ListView
-    {
-        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
-        public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-
-        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Auto)]
-        public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
-
-        const int GWL_STYLE = -16;
-        const int WM_NCCALCSIZE = 0x83;
-        const int WS_VSCROLL = 0x200000;
-        const int WS_HSCROLL = 0x100000;
-
-        protected override void WndProc(ref Message m)
-        {
-            switch (m.Msg)
-            {
-                case WM_NCCALCSIZE:
-                    int style = (int)GetWindowLongPtr64(this.Handle, GWL_STYLE);
-                    if ((style & WS_HSCROLL) == WS_HSCROLL)
-                        style &= ~WS_HSCROLL;
-                    SetWindowLongPtr64(this.Handle, GWL_STYLE, style);
-                    base.WndProc(ref m);
-                    break;
-                default:
-                    base.WndProc(ref m);
-                    break;
-            }
-        }
-    }
-
-    public class DirectoryListViewColumnSorter : IComparer
-    {
-        public int SortColumn;
-        public SortOrder Order;
-        public DirectoryListViewColumnSorter()
-        {
-            SortColumn = 1;
-            Order = SortOrder.None;
-        }
-        public int Compare(object x, object y)
-        {
-            int compareResult;
-            ListViewItem listviewX, listviewY;
-            listviewX = (ListViewItem)x;
-            listviewY = (ListViewItem)y;
-            CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
-            if (listviewX.SubItems[0].Text == "..") return -1;
-            if (listviewY.SubItems[0].Text == "..") return 1;
-            compareResult = ObjectCompare.Compare(
-                    listviewX.SubItems[SortColumn].Text,
-                    listviewY.SubItems[SortColumn].Text
-                );
-            if (SortColumn == 1) compareResult = -compareResult;
-            if (Order == SortOrder.Ascending)
-                return compareResult;
-            else if (Order == SortOrder.Descending)
-                return -compareResult;
-            else
-                return 0;
-        }
-    }
-
-    public class FileListViewColumnSorter : IComparer
-    {
-        public int SortColumn;
-        public SortOrder Order;
-        public FileListViewColumnSorter()
-        {
-            SortColumn = 1;
-            Order = SortOrder.None;
-        }
-        public int Compare(object x, object y)
-        {
-            int compareResult;
-            ListViewItem listviewX, listviewY;
-            listviewX = (ListViewItem)x;
-            listviewY = (ListViewItem)y;
-            CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
-            if (SortColumn == 3)
-            {
-                compareResult = ObjectCompare.Compare(
-                    listviewX.SubItems[SortColumn].Tag,
-                    listviewY.SubItems[SortColumn].Tag
-                );
-            }
-            else
-            {
-                compareResult = ObjectCompare.Compare(
-                    listviewX.SubItems[SortColumn].Text,
-                    listviewY.SubItems[SortColumn].Text
-                );
-            }
-            if (SortColumn == 2) compareResult = -compareResult;
-            if (Order == SortOrder.Ascending)
-                return compareResult;
-            else if (Order == SortOrder.Descending)
-                return -compareResult;
-            else
-                return 0;
-        }
-    }
     public partial class miniBrowser : Form
     {
+        private SplitContainer scMain = new SplitContainer()
+        {
+            AllowDrop = true,
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            BorderStyle = BorderStyle.None,
+            TabStop = false,
+            SplitterWidth = 1,
+            IsSplitterFixed = true,
+            FixedPanel = FixedPanel.Panel1
+        };
+        private SplitContainer scFavorites = new SplitContainer()
+        {
+            AllowDrop = true,
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Vertical,
+            BorderStyle = BorderStyle.None,
+            TabStop = false,
+            SplitterWidth = 2,
+            FixedPanel = FixedPanel.Panel1,
+            IsSplitterFixed = false
+        };
         private SplitContainer sc = new SplitContainer()
         {
             AllowDrop = true,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
+            Dock = DockStyle.Fill,
             Orientation = Orientation.Horizontal,
             BorderStyle = BorderStyle.None,
             TabStop = false,
             SplitterWidth = 3
+        };
+        private TabControl tc = new TabControl()
+        {
+            Dock = DockStyle.Fill
+        };
+        private ListViewWithoutScrollBar lvFavorites = new ListViewWithoutScrollBar()
+        {
+            View = View.List,
+            AllowDrop = true,
+            // FullRowSelect = true,
+            Dock = DockStyle.Fill,
+            SmallImageList = new ImageList()
         };
         private ListViewWithoutScrollBar lvFolder = new ListViewWithoutScrollBar()
         {
@@ -153,7 +85,7 @@ namespace miniExplorer
             AllowDrop = true,
             AutoSize = false,
             TabStop = false,
-            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            Dock = DockStyle.Fill,
             AutoCompleteMode = AutoCompleteMode.Append,
             AutoCompleteSource = AutoCompleteSource.CustomSource
         };
@@ -191,6 +123,7 @@ namespace miniExplorer
 
         private bool allowFold = false;
         private List<string> history = new List<string>();
+        private List<string> favorites;
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
@@ -205,10 +138,13 @@ namespace miniExplorer
 
         protected void ResizeControl()
         {
-            tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
-            sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
-            sc.Location = new Point(0, 18 * this.dpiScale);
+            scMain.SplitterDistance = 18 * this.dpiScale;
+            scFavorites.SplitterDistance = 100 * this.dpiScale;
             lvFolder.SmallImageList.ImageSize = new Size(
+                16 * this.dpiScale,
+                16 * this.dpiScale
+            );
+            lvFavorites.SmallImageList.ImageSize = new Size(
                 16 * this.dpiScale,
                 16 * this.dpiScale
             );
@@ -222,9 +158,13 @@ namespace miniExplorer
         {
             base.OnDpiChanged(e);
             this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
-            if (sc.Visible) this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
+            if (scMain.Visible) this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             ResizeControl();
-            if (sc.Visible) refreshForm();
+            if (scMain.Visible) 
+            {
+                refreshForm();
+                refreshFavorite();
+            }
         }
 
         protected override void WndProc(ref Message m)
@@ -242,9 +182,9 @@ namespace miniExplorer
                 case WM_NCRBUTTONDOWN:
                     allowFold = !allowFold;
                     if (allowFold)
-                        this.Fold();
+                        this.FoldWindow();
                     else
-                        this.Unfold();
+                        this.UnfoldWindow();
                     break;
                 default:
                     base.WndProc(ref m);
@@ -256,6 +196,8 @@ namespace miniExplorer
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(miniBrowser));
             fullSize = Properties.Settings.Default.FullSize;
+            favorites = Properties.Settings.Default.Favorites;
+
             watcher.Created += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Changed += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Deleted += new FileSystemEventHandler(watcher_FileInfoChange);
@@ -310,24 +252,35 @@ namespace miniExplorer
             sc.MouseDoubleClick += new MouseEventHandler(sc_DoubleClick);
 
             lvFolder.MouseClick += new MouseEventHandler(lv_MouseClick);
-            lvFolder.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
-            lvFolder.DragDrop += new DragEventHandler(lv_DragDrop);
-            lvFolder.KeyDown += new KeyEventHandler(lv_KeyDown);
-            lvFolder.MouseUp += new MouseEventHandler(lv_MouseUp);
-            lvFolder.MouseDown += new MouseEventHandler(lv_MouseDown);
             lvFile.MouseClick += new MouseEventHandler(lv_MouseClick);
-            lvFile.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
-            lvFile.DragDrop += new DragEventHandler(lv_DragDrop);
-            lvFile.KeyDown += new KeyEventHandler(lv_KeyDown);
+            lvFavorites.MouseClick += new MouseEventHandler(lv_MouseClick);
+
+            lvFile.DragOver += new DragEventHandler(lv_DragOver);
+            lvFavorites.DragOver += new DragEventHandler(lv_DragOver);
+
+            lvFolder.ItemDrag += new ItemDragEventHandler(lvBrowser_ItemDrag);
+            lvFile.ItemDrag += new ItemDragEventHandler(lvBrowser_ItemDrag);
+            lvFavorites.ItemDrag += new ItemDragEventHandler(lvFavorites_ItemDrag);
+
+            lvFolder.DragDrop += new DragEventHandler(lvBrowser_DragDrop);
+            lvFolder.KeyDown += new KeyEventHandler(lvBrowser_KeyDown);
+            lvFolder.MouseUp += new MouseEventHandler(lv_MouseUp);
+            lvFolder.MouseDown += new MouseEventHandler(lvBrowser_MouseDown);
+            lvFile.DragDrop += new DragEventHandler(lvBrowser_DragDrop);
+            lvFile.KeyDown += new KeyEventHandler(lvBrowser_KeyDown);
             lvFile.MouseUp += new MouseEventHandler(lv_MouseUp);
-            lvFile.MouseDown += new MouseEventHandler(lv_MouseDown);
+            lvFile.MouseDown += new MouseEventHandler(lvBrowser_MouseDown);
+
+            lvFavorites.DragEnter += new DragEventHandler(lvFavorites_DragEnter);
+            lvFavorites.MouseDoubleClick += new MouseEventHandler(lvFavorites_DoubleClick);
+            lvFavorites.KeyDown += new KeyEventHandler(lvFavorites_KeyDown);
+            lvFavorites.DragDrop += new DragEventHandler(lvFavorites_DragDrop);
 
             lvFolder.DragOver += new DragEventHandler(lvFolder_DragOver);
             lvFolder.MouseDoubleClick += new MouseEventHandler(lvFolder_DoubleClick);
             lvFolder.ColumnClick += new ColumnClickEventHandler(lvFolder_ColumnClick);
             lvFolder.AfterLabelEdit += new LabelEditEventHandler(lvFolder_AfterLabelEdit);
 
-            lvFile.DragOver += new DragEventHandler(lvFile_DragOver);
             lvFile.MouseDoubleClick += new MouseEventHandler(lvFile_DoubleClick);
             lvFile.ColumnClick += new ColumnClickEventHandler(lvFile_ColumnClick);
             lvFile.AfterLabelEdit += new LabelEditEventHandler(lvFile_AfterLabelEdit);
@@ -339,8 +292,11 @@ namespace miniExplorer
             this.Resize += new EventHandler(form_Resize);
             this.Load += new EventHandler(form_Load);
 
-            this.Controls.Add(tb);
-            this.Controls.Add(sc);
+            scMain.Panel1.Controls.Add(tb);
+            scMain.Panel2.Controls.Add(scFavorites);
+            scFavorites.Panel1.Controls.Add(lvFavorites);
+            scFavorites.Panel2.Controls.Add(sc);
+            this.Controls.Add(scMain);
             lvFile.Select();
             this.ResumeLayout(false);
 
@@ -352,6 +308,43 @@ namespace miniExplorer
                 this.dirPath = Properties.Settings.Default.LastDirPath;
             if (!Directory.Exists(this.dirPath))
                 this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
+            refreshFavorite();
+        }
+
+        public void refreshFavorite(){
+            ListViewItem item;
+            lvFavorites.Items.Clear();
+            lvFavorites.SmallImageList.Images.Clear();
+            lvFavorites.BeginUpdate();
+            foreach(string favPath in favorites){
+                if(Directory.Exists(favPath)||File.Exists(favPath)){
+                    lvFavorites.SmallImageList.Images.Add(favPath, ShellInfoHelper.GetIconFromPath(favPath));
+                    string displayPath = Path.GetFileName(favPath);
+                    if (displayPath=="") displayPath = favPath;
+                    item = new ListViewItem(displayPath, favPath);
+                    item.SubItems[0].Tag = favPath;
+                    lvFavorites.Items.Add(item);
+                }
+            }
+            lvFavorites.EndUpdate();
+        }
+
+        public void addToFavorite(string path){
+            favorites.Add(path);
+            updateFaverite();
+            refreshFavorite();
+        }
+
+        public void removeFromFavorite(string path){
+            favorites = favorites.Where(x => x != path).Distinct().ToList();
+            updateFaverite();
+            refreshFavorite();
+        }
+
+        public void updateFaverite(){
+            favorites = favorites.Where(x => Directory.Exists(x)||File.Exists(x)).Distinct().ToList();
+            Properties.Settings.Default.Favorites = favorites;
+            Properties.Settings.Default.Save();
         }
 
         public void refreshForm()
@@ -408,11 +401,11 @@ namespace miniExplorer
             }
 
             lvFolder.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
-            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
+            lvFolder.Columns[0].Width = lvFolder.ClientSize.Width - lvFolder.Columns[1].Width;
             lvFile.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
             lvFile.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
             lvFile.AutoResizeColumn(3, ColumnHeaderAutoResizeStyle.ColumnContent);
-            lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
+            lvFile.Columns[0].Width = lvFile.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width;
             sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
 
             lvFolder.EndUpdate();
@@ -423,61 +416,69 @@ namespace miniExplorer
         {
             FileSystemWatcher watcher = sender as FileSystemWatcher;
             watcher.EnableRaisingEvents = false;
-            if (sc.Visible) refreshForm();
+            updateFaverite();
+            if (scMain.Visible) {
+                refreshForm();
+                refreshFavorite();
+            }
             watcher.EnableRaisingEvents = true;
         }
 
         private void watcher_FileInfoChange(object sender, RenamedEventArgs e)
         {
-            if (sc.Visible) refreshForm();
+            if (favorites.Contains(e.OldFullPath))
+                favorites[favorites.IndexOf(e.OldFullPath)] = e.FullPath;
+            updateFaverite();
+            if (scMain.Visible) {
+                refreshForm();
+                refreshFavorite();
+            }
         }
 
         private void form_Resize(object sender, EventArgs e)
         {
-            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
-            lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
-            if (sc.Visible)
+            lvFolder.Columns[0].Width = lvFolder.ClientSize.Width - lvFolder.Columns[1].Width;
+            lvFile.Columns[0].Width = lvFile.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width;
+            if (scMain.Visible)
             {
                 sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
             }
         }
 
-        public void Fold()
+        public void FoldWindow()
         {
-            sc.Hide();
-            tb.Hide();
+            scMain.Hide();
             this.MinimumSize = new Size(150 * dpiScale, 0);
             this.MaximumSize = new Size(int.MaxValue, 0);
             this.ClientSize = new Size(fullSize.Width, 0);
         }
 
-        public void Unfold()
+        public void UnfoldWindow()
         {
-            tb.Show();
-            sc.Show();
+            scMain.Show();
             sc.Focus();
             this.MaximumSize = new Size(0, 0);
             this.ClientSize = fullSize;
             this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             refreshForm();
+            refreshFavorite();
         }
 
         private void form_ResizeEnd(object sender, EventArgs e)
         {
-            if (sc.Visible)
-                fullSize = this.ClientSize;
+            if (scMain.Visible) fullSize = this.ClientSize;
         }
 
         private void form_DragEnter(object sender, DragEventArgs e)
         {
             if (allowFold)
-                Unfold();
+                UnfoldWindow();
         }
 
         private void form_DragLeave(object sender, EventArgs e)
         {
             if (allowFold & !this.ClientRectangle.Contains(this.PointToClient(Control.MousePosition)))
-                Fold();
+                FoldWindow();
         }
 
         private void sc_DragEnter(object sender, DragEventArgs e)
@@ -487,7 +488,15 @@ namespace miniExplorer
                 e.Effect = DragDropEffects.Move;
             }
             this.Activate();
-            lvFile.Select();
+        }
+
+        private void lvFavorites_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effect = DragDropEffects.Copy;
+            }
+            this.Activate();
         }
 
         private void tb_DragEnter(object sender, DragEventArgs e)
@@ -529,6 +538,7 @@ namespace miniExplorer
         private void lvFolder_DragOver(object sender, DragEventArgs e)
         {
             ListView lvFolder = sender as ListView;
+            lvFolder.Focus();
             Point point = lvFolder.PointToClient(new Point(e.X, e.Y));
             ListViewItem item = lvFolder.GetItemAt(point.X, point.Y);
             if (item != null)
@@ -537,12 +547,40 @@ namespace miniExplorer
             }
         }
 
-        private void lvFile_DragOver(object sender, DragEventArgs e)
+        private void lv_DragOver(object sender, DragEventArgs e)
         {
-            lvFile.Focus();
+            ListView lv = sender as ListView;
+            lv.Focus();
         }
 
-        private void lv_DragDrop(object sender, DragEventArgs e)
+        private void lvFavorites_DragDrop(object sender, DragEventArgs e)
+        {
+            ListView lvFavorites = sender as ListView;
+            lvFavorites.Focus();
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] sourceNames = (string[])e.Data.GetData(DataFormats.FileDrop);
+                foreach (string sourceName in sourceNames)
+                {
+                    addToFavorite(sourceName);
+                }
+            }
+        }
+
+        private void lvFavorites_KeyDown(object sender, KeyEventArgs e)
+        {
+            ListView lvFavorites = sender as ListView;
+            if(e.KeyCode == Keys.Delete)
+            {
+                foreach (ListViewItem item in lvFavorites.SelectedItems)
+                {
+                    string fullPath = (string)item.SubItems[0].Tag;
+                    removeFromFavorite(fullPath);
+                }
+            }
+        }
+
+        private void lvBrowser_DragDrop(object sender, DragEventArgs e)
         {
             ListView lv = sender as ListView;
             Point point = lv.PointToClient(new Point(e.X, e.Y));
@@ -565,10 +603,11 @@ namespace miniExplorer
                 FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, DragDropEffects.Move);
             }
             refreshForm();
+            refreshFavorite();
             watcher.EnableRaisingEvents = true;
         }
 
-        private void lv_ItemDrag(object sender, ItemDragEventArgs e)
+        private void lvBrowser_ItemDrag(object sender, ItemDragEventArgs e)
         {
             List<string> paths = new List<string>();
             foreach (ListViewItem item in lvFile.SelectedItems)
@@ -579,7 +618,17 @@ namespace miniExplorer
             DoDragDrop(fileData, DragDropEffects.All);
         }
 
-        private void lv_KeyDown(object sender, KeyEventArgs e)
+        private void lvFavorites_ItemDrag(object sender, ItemDragEventArgs e)
+        {
+            ListView lvFavorites = sender as ListView;
+            List<string> paths = new List<string>();
+            foreach (ListViewItem item in lvFavorites.SelectedItems)
+                paths.Add((string)item.SubItems[0].Tag);
+            DataObject fileData = new DataObject(DataFormats.FileDrop, paths.ToArray());
+            DoDragDrop(fileData, DragDropEffects.All);
+        }
+
+        private void lvBrowser_KeyDown(object sender, KeyEventArgs e)
         {
             ListView lv = sender as ListView;
             if (e.Control && e.KeyCode == Keys.V)
@@ -728,13 +777,17 @@ namespace miniExplorer
                 e.SuppressKeyPress = true;
                 ChangeDirDialog();
             }
-            if (e.Control && e.KeyCode == Keys.W)
+            else if (e.Control && e.KeyCode == Keys.W)
             {
                 Application.Exit();
             }
-            if (e.Control && e.KeyCode == Keys.E)
+            else if (e.Control && e.KeyCode == Keys.E)
             {
                 this.Location = new Point(Cursor.Position.X - this.ClientSize.Width / 2, Cursor.Position.Y - this.ClientSize.Height / 2);
+            }
+            else if (e.Control && e.KeyCode == Keys.D)
+            {
+                addToFavorite(this.dirPath);
             }
         }
 
@@ -773,22 +826,24 @@ namespace miniExplorer
 
         public void OnMouseEnterWindow()
         {
-            if (allowFold) Unfold();
+            if (allowFold) UnfoldWindow();
         }
 
         public void OnMouseLeaveWindow()
         {
-            if (allowFold) Fold();
+            if (allowFold) FoldWindow();
         }
 
         private void sc_DoubleClick(object sender, MouseEventArgs e)
         {
+            SplitContainer sc = sender as SplitContainer;
             sc.SplitterDistance = Math.Min(sc.Height / 2, (lvFolder.Items.Count + 2) * lvFolder.GetItemRect(1).Height);
         }
 
         private void lvFolder_DoubleClick(object sender, MouseEventArgs e)
         {
-            ListViewItem item = lvFolder.FocusedItem;
+            ListView lv = sender as ListView;
+            ListViewItem item = lv.FocusedItem;
             string fullPath = (string)item.SubItems[0].Tag;
             if (
                 e.Button == MouseButtons.Right && item.SubItems[0].Text == ".." ||
@@ -805,6 +860,7 @@ namespace miniExplorer
 
         private void lvFile_DoubleClick(object sender, MouseEventArgs e)
         {
+            ListView lvFile = sender as ListView;
             ListViewItem item = lvFile.FocusedItem;
             string fullPath = (string)item.SubItems[0].Tag;
             if (e.Button == MouseButtons.Left && File.Exists(fullPath))
@@ -820,6 +876,11 @@ namespace miniExplorer
             if (e.Label == null) return;
             string sourceName = (string)focusedItem.SubItems[0].Tag;
             string destinationName = Path.Combine(this.dirPath, e.Label);
+            if (focusedItem.SubItems[0].Text == "..")
+            {
+                e.CancelEdit = true;
+                return;
+            }
             if (sourceName != destinationName)
             {
                 if (Directory.Exists(sourceName))
@@ -828,13 +889,11 @@ namespace miniExplorer
                         MessageBox.Show("指定的文件夹名与已存在的文件重名。请指定其他名称。", "重命名文件夹");
                     else if (!Directory.Exists(destinationName))
                     {
-                        watcher.EnableRaisingEvents = false;
                         FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
                         if (Directory.Exists(sourceName))
                             e.CancelEdit = true;
                         else
                             focusedItem.SubItems[0].Tag = destinationName;
-                        watcher.EnableRaisingEvents = true;
                     }
                     else if (
                             MessageBox.Show(
@@ -893,13 +952,30 @@ namespace miniExplorer
             ListView lv = sender as ListView;
             if (e.Button == MouseButtons.Right)
             {
-                this.Text = lv.HitTest(e.Location).Location.ToString();
                 var item = lv.FocusedItem;
                 if (item != null && item.Bounds.Contains(e.Location))
                 {
                     FileInfo[] arrFI = new FileInfo[1];
                     arrFI[0] = new FileInfo((string)item.SubItems[0].Tag);
                     ctxMnu.ShowContextMenu(arrFI, this.PointToScreen(new Point(e.X, e.Y + 35)));
+                }
+            }
+        }
+
+        private void lvFavorites_DoubleClick(object sender, MouseEventArgs e)
+        {
+            ListView lvFavorites = sender as ListView;
+            ListViewItem item = lvFavorites.FocusedItem;
+            string fullPath = (string)item.SubItems[0].Tag;
+            if (e.Button == MouseButtons.Left)
+            {
+                if (Directory.Exists(fullPath))
+                {
+                    this.dirPath = fullPath;
+                }
+                else if (File.Exists(fullPath))
+                {
+                    Process.Start(new ProcessStartInfo(fullPath) { UseShellExecute = true });
                 }
             }
         }
@@ -950,7 +1026,7 @@ namespace miniExplorer
             this.dirPath = item.ToolTipText;
         }
 
-        private void lv_MouseDown(object sender, MouseEventArgs e)
+        private void lvBrowser_MouseDown(object sender, MouseEventArgs e)
         {
             ListView lv = sender as ListView;
             if (e.Button == MouseButtons.Left && e.Clicks == 2)
