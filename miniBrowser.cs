@@ -152,6 +152,7 @@ namespace miniExplorer
         {
             AllowDrop = true,
             AutoSize = false,
+            TabStop = false,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
             AutoCompleteMode = AutoCompleteMode.Append,
             AutoCompleteSource = AutoCompleteSource.CustomSource
@@ -166,7 +167,25 @@ namespace miniExplorer
         private ToolStripMenuItem cmsiExpDir;
         private ToolStripMenuItem cmsiHist;
 
-        private string dirPath;
+        private string _dirPath;
+
+        public string dirPath
+        {
+            get
+            {
+                return this._dirPath;
+            }
+            set
+            {
+                if (!Directory.Exists(value)) return;
+                if (this._dirPath != null)
+                    this.history.Insert(0, this._dirPath);
+                this.history = this.history.Distinct().Take(10).ToList();
+                this._dirPath = ShellInfoHelper.GetExactPathName(value);
+                refreshForm();
+            }
+        }
+
         private Size fullSize;
         private DpiFactor dpiScale;
 
@@ -179,7 +198,6 @@ namespace miniExplorer
             Properties.Settings.Default.FullSize = this.fullSize;
             Properties.Settings.Default.LastDirPath = this.dirPath;
             Properties.Settings.Default.WindowLocation = this.Location;
-            Properties.Settings.Default.FirstRun = false;
             Properties.Settings.Default.Save();
             base.OnFormClosing(e);
             watcher.Dispose();
@@ -238,8 +256,6 @@ namespace miniExplorer
         {
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(miniBrowser));
             fullSize = Properties.Settings.Default.FullSize;
-            bool isFirstRun = Properties.Settings.Default.FirstRun;
-
             watcher.Created += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Changed += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Deleted += new FileSystemEventHandler(watcher_FileInfoChange);
@@ -280,7 +296,6 @@ namespace miniExplorer
 
             cms.Items.Add("跳转到...").Click += new EventHandler(cms_GoTo_Click);
 
-            tb.KeyDown += new KeyEventHandler(tb_KeyDown);
             tb.KeyUp += new KeyEventHandler(tb_KeyUp);
             tb.DragEnter += new DragEventHandler(tb_DragEnter);
             tb.DragDrop += new DragEventHandler(tb_DragDrop);
@@ -331,35 +346,18 @@ namespace miniExplorer
 
             ResizeControl();
 
-            if (isFirstRun)
-            {
-                this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
-            }
-            else if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
-            {
+            if (Environment.GetCommandLineArgs().Length > 1 && Directory.Exists(Environment.GetCommandLineArgs()[1]))
                 this.dirPath = Environment.GetCommandLineArgs()[1];
-            }
             else
-            {
                 this.dirPath = Properties.Settings.Default.LastDirPath;
-            }
             if (!Directory.Exists(this.dirPath))
                 this.dirPath = ShellInfoHelper.GetDownloadFolderPath();
-
-            changeDirectory(this.dirPath);
-        }
-
-        public void changeDirectory(string path)
-        {
-            this.history.Insert(0, this.dirPath);
-            this.history = this.history.Distinct().Take(10).ToList();
-            this.dirPath = ShellInfoHelper.GetExactPathName(path);
-            refreshForm();
         }
 
         public void refreshForm()
         {
-            this.Text = tb.Text = this.watcher.Path = this.dirPath;
+            this.Text = this.watcher.Path = this.dirPath;
+            tb.Text = this.dirPath.TrimEnd('\\') + "\\";
             DirectoryInfo dirInfo = new DirectoryInfo(this.dirPath);
             ListViewItem item;
             lvFolder.Items.Clear();
@@ -524,7 +522,7 @@ namespace miniExplorer
             }
             if (Directory.Exists(path))
             {
-                changeDirectory(path);
+                this.dirPath = path;
             }
         }
 
@@ -636,28 +634,81 @@ namespace miniExplorer
             }
         }
 
-        private void tb_KeyDown(object sender, KeyEventArgs e)
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
-            if (e.KeyCode == Keys.Enter)
+            if (keyData == Keys.Tab)
             {
-                if (Directory.Exists(tb.Text))
+                string target = this.dirPath;
+
+                string text = tb.Text.Substring(0, tb.SelectionStart);
+                string textRemain = tb.Text.Substring(tb.SelectionStart);
+                if (!Path.IsPathRooted(text) || text.EndsWith(":")) return true;
+                text = Path.GetFullPath(text);
+                string dir = Path.GetDirectoryName(text);
+                string query = Path.GetFileName(text);
+                if (dir == null) dir = text;
+
+                if (!Directory.Exists(dir))
                 {
-                    changeDirectory(tb.Text);
+                    tb.Text = dir + textRemain;
+                    tb.SelectionStart = tb.Text.Length - textRemain.Length;
+                    return true;
                 }
                 else
                 {
-                    tb.Text = this.dirPath;
+                    string queryRemain = textRemain.Split(new char[] { '/', '\\' }, 2).First();
+                    string queryFull = query + queryRemain;
+                    if (Directory.Exists(Path.Combine(dir, queryFull)))
+                    {
+                        textRemain = textRemain.Substring(queryRemain.Length).TrimStart(new char[] { '/', '\\' });
+                        target = Path.Combine(dir, queryFull);
+                    }
+                    else
+                    {
+                        List<string> dirCandidate = new DirectoryInfo(dir).GetDirectories().Select(x => x.Name).Where(x => x.ToLower().StartsWith(query.ToLower())).ToList();
+                        if (dirCandidate.Count != 1) return true;
+                        target = Path.Combine(dir, dirCandidate.First());
+                    }
                 }
-                e.Handled = true;
-                e.SuppressKeyPress = true;
+                this.dirPath = target;
+                tb.Text += textRemain;
+                tb.SelectionStart = tb.Text.Length - textRemain.Length;
+                return true;
             }
+            if (keyData == Keys.Enter)
+            {
+                if (Directory.Exists(tb.Text))
+                {
+                    string text = tb.Text.Substring(0, tb.SelectionStart);
+                    this.dirPath = tb.Text;
+                    tb.SelectionStart = Path.GetFullPath(text).Length;
+                }
+                else
+                {
+                    tb.Text = this.dirPath.TrimEnd('\\') + "\\";
+                    tb.SelectionStart = tb.Text.Length;
+                }
+                return true;
+            }
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         private void tb_KeyUp(object sender, KeyEventArgs e)
         {
-            if (Directory.Exists(tb.Text) && new Uri(Path.GetFullPath(tb.Text.TrimEnd(new char[] { '/', '\\' }))) != new Uri(Path.GetFullPath(this.dirPath.TrimEnd(new char[] { '/', '\\' }))))
+            if (e.Control && e.KeyCode == Keys.V)
             {
-                changeDirectory(Path.GetFullPath(tb.Text));
+                string query = Path.GetFileName(tb.Text);
+                string dir = Path.GetDirectoryName(tb.Text);
+                if (query == "" || !Directory.Exists(dir)) return;
+                if (!this.dirPath.ToLower().StartsWith(dir.ToLower()))
+                {
+                    if (Directory.Exists(tb.Text))
+                    {
+                        this.dirPath = tb.Text;
+                        tb.SelectionStart = tb.Text.Length;
+                        return;
+                    }
+                }
             }
         }
 
@@ -696,7 +747,7 @@ namespace miniExplorer
                     folderDialog.SelectedPath[0] != '\\'
                 )
                 {
-                    changeDirectory(folderDialog.SelectedPath);
+                    this.dirPath = folderDialog.SelectedPath;
                 }
             }
         }
@@ -708,7 +759,7 @@ namespace miniExplorer
                 ChangeDirDialog();
             else
             {
-                changeDirectory(path);
+                this.dirPath = path;
             }
         }
 
@@ -740,7 +791,7 @@ namespace miniExplorer
             }
             else if (e.Button == MouseButtons.Left && Directory.Exists(fullPath))
             {
-                changeDirectory(fullPath);
+                this.dirPath = fullPath;
             }
         }
 
@@ -779,7 +830,7 @@ namespace miniExplorer
                     }
                     else if (
                             MessageBox.Show(
-$@"此目标已包含名为“{e.Label}”的文件夹。
+        $@"此目标已包含名为“{e.Label}”的文件夹。
 如果任何文件使用相同的名称，将会询问你是否要替换这些文件。
 你仍然将文件夹{sourceName}
 与文件夹{destinationName}
@@ -888,7 +939,7 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
         private void cmsiExpDir_Click(object sender, EventArgs e)
         {
             ToolStripItem item = sender as ToolStripItem;
-            changeDirectory(item.ToolTipText);
+            this.dirPath = item.ToolTipText;
         }
 
         private void lv_MouseDown(object sender, MouseEventArgs e)
