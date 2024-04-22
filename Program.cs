@@ -7,6 +7,7 @@ namespace miniExplorer
 {
     static class Program
     {
+        public static miniBrowser browser;
         /// <summary>
         ///  The main entry point for the application.
         /// </summary>
@@ -20,7 +21,8 @@ namespace miniExplorer
             }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new miniBrowser());
+            browser = new miniBrowser();
+            Application.Run(browser);
         }
     }
 }

@@ -8,9 +8,6 @@
     <Setting Name="FullSize" Type="System.Drawing.Size" Scope="User">
       <Value Profile="(Default)">600, 600</Value>
     </Setting>
-    <Setting Name="MiniSize" Type="System.Drawing.Size" Scope="User">
-      <Value Profile="(Default)">150, 150</Value>
-    </Setting>
     <Setting Name="LastDirPath" Type="System.String" Scope="User">
       <Value Profile="(Default)" />
     </Setting>

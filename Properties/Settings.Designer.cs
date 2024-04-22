@@ -25,18 +25,6 @@
         
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
-        [global::System.Configuration.DefaultSettingValueAttribute("150, 150")]
-        public global::System.Drawing.Size MiniSize {
-            get {
-                return ((global::System.Drawing.Size)(this["MiniSize"]));
-            }
-            set {
-                this["MiniSize"] = value;
-            }
-        }
-        
-        [global::System.Configuration.UserScopedSettingAttribute()]
-        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("600, 500")]
         public global::System.Drawing.Size FullSize {
             get {
