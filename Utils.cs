@@ -106,7 +106,7 @@ public class ShellInfoHelper
     public static Image GetIconFromPath(string pszPath)
     {
         SHFILEINFO info = new SHFILEINFO();
-        IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_ICON | SHGFI_SMALLICON);
+        SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_ICON | SHGFI_SMALLICON);
         if (info.hIcon == (IntPtr)0)
             return new Bitmap(32, 32);
         else
@@ -116,7 +116,7 @@ public class ShellInfoHelper
     public static string GetDisplayNameFromPath(string pszPath)
     {
         SHFILEINFO info = new SHFILEINFO();
-        IntPtr iconIntPtr = SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
+        SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
         return info.szDisplayName;
     }
 }
