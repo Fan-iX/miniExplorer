@@ -18,6 +18,7 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 * High DPI support
 * Remember last window location
 * Mini size mode
+* Drag/drop support
 
 ## Usage
 
@@ -33,10 +34,13 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 
 ### Keyboard shortcut
 
-| key            | action                                 |
-|----------------|----------------------------------------|
-| `Ctrl+W`       | exit app                               |
-| `Ctrl+O`       | select directory                       |
-| `Ctrl+E`       | move window to cursor position         |
-| `Delete`       | move item to recycle bin               |
-| `Shift+Delete` | remove item (permanently, with dialog) |
+| key            | action                                      |
+|----------------|---------------------------------------------|
+| `Ctrl+C`       | copy file/folder                            |
+| `Ctrl+X`       | cut file/folder                             |
+| `Ctrl+V`       | paste to current folder                     |
+| `Ctrl+W`       | exit app                                    |
+| `Ctrl+O`       | select directory                            |
+| `Ctrl+E`       | move window to cursor position              |
+| `Delete`       | move item to recycle bin                    |
+| `Shift+Delete` | remove item (permanently, will show dialog) |
