@@ -1,5 +1,4 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <PlatformTarget>x64</PlatformTarget>
@@ -10,11 +9,9 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Resources\miniExplorer.ico</ApplicationIcon>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <GenerateSupportedRuntime>False</GenerateSupportedRuntime>
   </PropertyGroup>
   <ItemGroup>
-    <Resource Include="Resources\miniExplorer.ico" />
-    <None Include="App.config"/>
+    <EmbeddedResource Include="Resources\miniExplorer.ico" />
     <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System.Configuration" />
   </ItemGroup>
