@@ -119,6 +119,19 @@ public class ShellInfoHelper
         SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
         return info.szDisplayName;
     }
+
+    public static string GetExactPathName(string pathName)
+    {
+        var di = new DirectoryInfo(pathName);
+
+        if (di.Parent != null) {
+            return Path.Combine(
+                GetExactPathName(di.Parent.FullName), 
+                di.Parent.GetFileSystemInfos(di.Name)[0].Name);
+        } else {
+            return di.Name.ToUpper();
+        }
+    }
 }
 
 public class ShellApplication{
