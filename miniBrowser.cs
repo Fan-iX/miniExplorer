@@ -83,6 +83,52 @@ public class NativeMethods
     }
 }
 
+public class FileSystemHelper
+{
+    public static void OperateFileSystemItem(
+        string sourceName,
+        string destinationName,
+        DragDropEffects operationEffect
+    )
+    {
+        UIOption showUI = UIOption.AllDialogs;
+        UICancelOption onUserCancel = UICancelOption.DoNothing;
+        if (operationEffect.HasFlag(DragDropEffects.Move))
+        {
+            if (sourceName == destinationName) return;
+            if (File.Exists(sourceName))
+                FileSystem.MoveFile(sourceName, destinationName, showUI, onUserCancel);
+            else if (Directory.Exists(sourceName))
+                FileSystem.MoveDirectory(sourceName, destinationName, showUI, onUserCancel);
+        }
+        else
+        {
+            if (sourceName == destinationName) destinationName = Path.Combine(
+                Path.GetDirectoryName(sourceName),
+                Path.GetFileNameWithoutExtension(sourceName) + " - Copy" +
+                Path.GetExtension(sourceName)
+            );
+            if (File.Exists(sourceName))
+                FileSystem.CopyFile(sourceName, destinationName, showUI, onUserCancel);
+            else if (Directory.Exists(sourceName))
+                FileSystem.CopyDirectory(sourceName, destinationName, showUI, onUserCancel);
+        }
+    }
+
+    public static void DeleteFileSystemItem(
+        string itemName,
+        RecycleOption recycle
+    )
+    {
+        UIOption showUI = UIOption.AllDialogs;
+        UICancelOption onUserCancel = UICancelOption.DoNothing;
+        if (File.Exists(itemName))
+            FileSystem.DeleteFile(itemName, showUI, recycle, onUserCancel);
+        else if (Directory.Exists(itemName))
+            FileSystem.DeleteDirectory(itemName, showUI, recycle, onUserCancel);
+    }
+}
+
 public class ListViewWithoutScrollBar : ListView
 {
     protected override void WndProc(ref Message m)
@@ -112,16 +158,14 @@ public class ListViewWithoutScrollBar : ListView
     public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
 }
 
-public class ListViewColumnSorter : IComparer
+public class DirectoryListViewColumnSorter : IComparer
 {
     public int SortColumn;
     public SortOrder Order;
-    private CaseInsensitiveComparer ObjectCompare;
-    public ListViewColumnSorter()
+    public DirectoryListViewColumnSorter()
     {
-        SortColumn = 0;
+        SortColumn = 1;
         Order = SortOrder.None;
-        ObjectCompare = new CaseInsensitiveComparer();
     }
     public int Compare(object x, object y)
     {
@@ -129,17 +173,45 @@ public class ListViewColumnSorter : IComparer
         ListViewItem listviewX, listviewY;
         listviewX = (ListViewItem)x;
         listviewY = (ListViewItem)y;
+        CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
         if (listviewX.SubItems[0].Text == "..") return -1;
         if (listviewY.SubItems[0].Text == "..") return 1;
-        if (SortColumn == 2)
+        compareResult = ObjectCompare.Compare(
+                listviewX.SubItems[SortColumn].Text,
+                listviewY.SubItems[SortColumn].Text
+            );
+        if (SortColumn == 1) compareResult = -compareResult;
+        if (Order == SortOrder.Ascending)
+            return compareResult;
+        else if (Order == SortOrder.Descending)
+            return -compareResult;
+        else
+            return 0;
+    }
+}
+
+public class FileListViewColumnSorter : IComparer
+{
+    public int SortColumn;
+    public SortOrder Order;
+    public FileListViewColumnSorter()
+    {
+        SortColumn = 1;
+        Order = SortOrder.None;
+    }
+    public int Compare(object x, object y)
+    {
+        int compareResult;
+        ListViewItem listviewX, listviewY;
+        listviewX = (ListViewItem)x;
+        listviewY = (ListViewItem)y;
+        CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
+        if (SortColumn == 3)
         {
-            if ((long)listviewX.SubItems[SortColumn].Tag == -1) return 1;
-            if ((long)listviewY.SubItems[SortColumn].Tag == -1) return -1;
             compareResult = ObjectCompare.Compare(
                 listviewX.SubItems[SortColumn].Tag,
                 listviewY.SubItems[SortColumn].Tag
             );
-            if (SortColumn == 1) compareResult = -compareResult;
         }
         else
         {
@@ -147,12 +219,12 @@ public class ListViewColumnSorter : IComparer
                 listviewX.SubItems[SortColumn].Text,
                 listviewY.SubItems[SortColumn].Text
             );
-            if (SortColumn == 1) compareResult = -compareResult;
         }
+        if (SortColumn == 2) compareResult = -compareResult;
         if (Order == SortOrder.Ascending)
             return compareResult;
         else if (Order == SortOrder.Descending)
-            return (-compareResult);
+            return -compareResult;
         else
             return 0;
     }
@@ -195,7 +267,9 @@ namespace miniExplorer
         }
 
         private string dirPath;
-        private ListViewWithoutScrollBar lv;
+        private SplitContainer sc;
+        private ListViewWithoutScrollBar lvFile;
+        private ListViewWithoutScrollBar lvFolder;
         private TextBox tb;
         private FileSystemWatcher watcher;
         private ShellContextMenu ctxMnu = new ShellContextMenu();
@@ -239,9 +313,6 @@ namespace miniExplorer
             watcher.Deleted += new FileSystemEventHandler(watcher_FileInfoChange);
             watcher.Renamed += new RenamedEventHandler(watcher_FileInfoChange);
 
-            this.FormBorderStyle = FormBorderStyle.SizableToolWindow;
-
-            this.ClientSize = fullSize;
             if (isFirstRun)
             {
                 this.dirPath = NativeMethods.GetDownloadFolderPath();
@@ -254,6 +325,9 @@ namespace miniExplorer
             {
                 this.dirPath = Properties.Settings.Default.LastDirPath;
             }
+
+            this.ClientSize = fullSize;
+            this.FormBorderStyle = FormBorderStyle.SizableToolWindow;
             this.StartPosition = FormStartPosition.WindowsDefaultLocation;
             this.TopMost = true;
             this.MaximizeBox = false;
@@ -275,25 +349,56 @@ namespace miniExplorer
                 Size = new Size(this.ClientSize.Width, 18 * this.dpiScale)
             };
 
-            lv = new ListViewWithoutScrollBar()
+            sc = new SplitContainer()
+            {
+                AllowDrop = true,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
+                Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale),
+                Orientation = Orientation.Horizontal,
+                Location = new Point(0, 18 * this.dpiScale),
+                BorderStyle = BorderStyle.None,
+                TabStop = false,
+                SplitterWidth = 3
+            };
+
+            lvFolder = new ListViewWithoutScrollBar()
             {
                 View = View.Details,
                 AllowDrop = true,
                 LabelEdit = true,
                 // FullRowSelect = true,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Bottom | AnchorStyles.Right,
-                Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale),
-                Location = new Point(0, 18 * this.dpiScale),
-                ListViewItemSorter = new ListViewColumnSorter()
-            };
-            lv.SmallImageList = new ImageList()
-            {
-                ImageSize = new Size(16 * this.dpiScale, 16 * this.dpiScale)
+                Dock = DockStyle.Fill,
+                ListViewItemSorter = new DirectoryListViewColumnSorter(),
+                SmallImageList = new ImageList()
+                {
+                    ImageSize = new Size(16 * this.dpiScale, 16 * this.dpiScale)
+                }
             };
 
-            lv.Columns.Add("名称", -2, HorizontalAlignment.Left);
-            lv.Columns.Add("修改时间", 0, HorizontalAlignment.Left);
-            lv.Columns.Add("大小", 0, HorizontalAlignment.Right);
+            lvFolder.Columns.Add("文件夹", -2, HorizontalAlignment.Left);
+            lvFolder.Columns.Add("修改时间", 0, HorizontalAlignment.Left);
+
+            lvFile = new ListViewWithoutScrollBar()
+            {
+                View = View.Details,
+                AllowDrop = true,
+                LabelEdit = true,
+                // FullRowSelect = true,
+                Dock = DockStyle.Fill,
+                ListViewItemSorter = new FileListViewColumnSorter(),
+                SmallImageList = new ImageList()
+                {
+                    ImageSize = new Size(16 * this.dpiScale, 16 * this.dpiScale)
+                }
+            };
+
+            lvFile.Columns.Add("文件", -2, HorizontalAlignment.Left);
+            lvFile.Columns.Add("类型", 0, HorizontalAlignment.Left);
+            lvFile.Columns.Add("修改时间", 0, HorizontalAlignment.Left);
+            lvFile.Columns.Add("大小", 0, HorizontalAlignment.Right);
+
+            sc.Panel1.Controls.Add(lvFolder);
+            sc.Panel2.Controls.Add(lvFile);
             refreshList();
             watcher.EnableRaisingEvents = true;
 
@@ -302,17 +407,36 @@ namespace miniExplorer
             tb.DragDrop += new DragEventHandler(tb_DragDrop);
             tb.DpiChangedAfterParent += new EventHandler(tb_DpiChangedAfterParent);
 
-            lv.DragEnter += new DragEventHandler(lv_DragEnter);
-            lv.DragLeave += new EventHandler(lv_DragLeave);
-            lv.DragOver += new DragEventHandler(lv_DragOver);
-            lv.DragDrop += new DragEventHandler(lv_DragDrop);
-            lv.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
-            lv.MouseDoubleClick += new MouseEventHandler(lv_DoubleClick);
-            lv.ColumnClick += new ColumnClickEventHandler(lv_ColumnClick);
-            lv.KeyDown += new KeyEventHandler(lv_KeyDown);
-            lv.MouseClick += new MouseEventHandler(lv_MouseClick);
-            lv.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
-            lv.AfterLabelEdit += new LabelEditEventHandler(lv_AfterLabelEdit);
+            sc.DragEnter += new DragEventHandler(sc_DragEnter);
+            lvFolder.DragEnter += new DragEventHandler(sc_DragEnter);
+            lvFile.DragEnter += new DragEventHandler(sc_DragEnter);
+            sc.DragLeave += new EventHandler(sc_DragLeave);
+            lvFolder.DragLeave += new EventHandler(sc_DragLeave);
+            lvFile.DragLeave += new EventHandler(sc_DragLeave);
+            sc.DpiChangedAfterParent += new EventHandler(sc_DpiChangedAfterParent);
+            lvFolder.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
+            lvFile.DpiChangedAfterParent += new EventHandler(lv_DpiChangedAfterParent);
+
+            sc.MouseDoubleClick += new MouseEventHandler(sc_DoubleClick);
+
+            lvFolder.MouseClick += new MouseEventHandler(lv_MouseClick);
+            lvFolder.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
+            lvFolder.DragDrop += new DragEventHandler(lv_DragDrop);
+            lvFolder.KeyDown += new KeyEventHandler(lv_KeyDown);
+            lvFile.MouseClick += new MouseEventHandler(lv_MouseClick);
+            lvFile.ItemDrag += new ItemDragEventHandler(lv_ItemDrag);
+            lvFile.DragDrop += new DragEventHandler(lv_DragDrop);
+            lvFile.KeyDown += new KeyEventHandler(lv_KeyDown);
+
+            lvFolder.DragOver += new DragEventHandler(lvFolder_DragOver);
+            lvFolder.MouseDoubleClick += new MouseEventHandler(lvFolder_DoubleClick);
+            lvFolder.ColumnClick += new ColumnClickEventHandler(lvFolder_ColumnClick);
+            lvFolder.AfterLabelEdit += new LabelEditEventHandler(lvFolder_AfterLabelEdit);
+
+            lvFile.DragOver += new DragEventHandler(lvFile_DragOver);
+            lvFile.MouseDoubleClick += new MouseEventHandler(lvFile_DoubleClick);
+            lvFile.ColumnClick += new ColumnClickEventHandler(lvFile_ColumnClick);
+            lvFile.AfterLabelEdit += new LabelEditEventHandler(lvFile_AfterLabelEdit);
 
             this.MouseDown += new MouseEventHandler(form_MouseDown);
             this.ResizeEnd += new EventHandler(form_ResizeEnd);
@@ -322,63 +446,71 @@ namespace miniExplorer
             this.Shown += new EventHandler(form_Shown);
 
             this.Controls.Add(tb);
-            this.Controls.Add(lv);
-            lv.Select();
+            this.Controls.Add(sc);
+            lvFile.Select();
             this.ResumeLayout(false);
         }
 
         public void refreshList()
         {
-            this.Text = dirPath;
-            tb.Text = dirPath;
-            this.watcher.Path = dirPath;
-            lv.Items.Clear();
-            lv.SmallImageList.Images.Clear();
-            System.IO.DirectoryInfo dir = new System.IO.DirectoryInfo(this.dirPath);
+            this.Text = tb.Text = this.watcher.Path = this.dirPath;
+            DirectoryInfo dirInfo = new DirectoryInfo(this.dirPath);
             ListViewItem item;
-            lv.BeginUpdate();
+            lvFolder.Items.Clear();
+            lvFolder.SmallImageList.Images.Clear();
+            lvFolder.BeginUpdate();
             string parentPath = Path.GetFullPath(Path.Combine(this.dirPath, ".."));
-            lv.SmallImageList.Images.Add(parentPath, NativeMethods.GetIconFromPath(parentPath));
+            lvFolder.SmallImageList.Images.Add(parentPath, NativeMethods.GetIconFromPath(parentPath));
             item = new ListViewItem("..", parentPath);
             item.SubItems[0].Tag = parentPath;
             item.SubItems.Add(new DirectoryInfo(parentPath).LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
-            item.SubItems.Add("");
-            item.SubItems[2].Tag = (long)-1;
-            lv.Items.Add(item);
-            foreach (FileSystemInfo file in dir.GetFileSystemInfos().Where(x => (x.Attributes & FileAttributes.Hidden) == 0).OrderByDescending(x => x.LastWriteTime))
+            lvFolder.Items.Add(item);
+
+            foreach (DirectoryInfo folder in dirInfo.GetDirectories().Where(x => (x.Attributes & FileAttributes.Hidden) == 0).OrderByDescending(x => x.LastWriteTime))
             {
-                if (file is DirectoryInfo || file.Extension == "")
+                lvFolder.SmallImageList.Images.Add(folder.FullName, NativeMethods.GetIconFromPath(folder.FullName));
+                item = new ListViewItem(NativeMethods.GetDisplayNameFromPath(folder.FullName), folder.FullName);
+                item.SubItems[0].Tag = folder.FullName;
+                item.SubItems.Add(folder.LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
+                lvFolder.Items.Add(item);
+            }
+            lvFolder.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
+            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
+            lvFolder.EndUpdate();
+            sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
+
+            lvFile.Items.Clear();
+            lvFile.SmallImageList.Images.Clear();
+            lvFile.BeginUpdate();
+            foreach (FileInfo file in dirInfo.GetFiles().Where(x => (x.Attributes & FileAttributes.Hidden) == 0).OrderByDescending(x => x.LastWriteTime))
+            {
+                if (file.Extension == "")
                 {
-                    lv.SmallImageList.Images.Add(file.FullName, NativeMethods.GetIconFromPath(file.FullName));
+                    lvFile.SmallImageList.Images.Add(file.FullName, NativeMethods.GetIconFromPath(file.FullName));
                     item = new ListViewItem(NativeMethods.GetDisplayNameFromPath(file.FullName), file.FullName);
                 }
                 else
                 {
                     string imageKey = file.Extension;
-                    if (!lv.SmallImageList.Images.ContainsKey(imageKey))
+                    if (!lvFile.SmallImageList.Images.ContainsKey(imageKey))
                     {
-                        lv.SmallImageList.Images.Add(imageKey, NativeMethods.GetIconFromPath(file.FullName));
+                        lvFile.SmallImageList.Images.Add(imageKey, NativeMethods.GetIconFromPath(file.FullName));
                     }
                     item = new ListViewItem(file.Name, imageKey);
                 }
                 item.SubItems[0].Tag = file.FullName;
+                item.SubItems.Add(Path.GetExtension(file.FullName));
                 item.SubItems.Add(file.LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
-                if (file is DirectoryInfo)
-                {
-                    item.SubItems.Add("");
-                    item.SubItems[2].Tag = (long)-1;
-                }
-                else if (file is FileInfo)
-                {
-                    item.SubItems.Add(FileSizeHelper.GetHumanReadableFileSize(((FileInfo)file).Length));
-                    item.SubItems[2].Tag = (long)((FileInfo)file).Length;
-                }
-                lv.Items.Add(item);
+                item.SubItems.Add(FileSizeHelper.GetHumanReadableFileSize(file.Length));
+                item.SubItems[3].Tag = (long)file.Length;
+
+                lvFile.Items.Add(item);
             }
-            lv.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
-            lv.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
-            lv.Columns[0].Width = this.ClientSize.Width - lv.Columns[1].Width - lv.Columns[2].Width - 40;
-            lv.EndUpdate();
+            lvFile.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
+            lvFile.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
+            lvFile.AutoResizeColumn(3, ColumnHeaderAutoResizeStyle.ColumnContent);
+            lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
+            lvFile.EndUpdate();
         }
 
         private void watcher_FileInfoChange(object sender, FileSystemEventArgs e)
@@ -405,7 +537,9 @@ namespace miniExplorer
 
         private void form_Resize(object sender, EventArgs e)
         {
-            lv.Columns[0].Width = this.ClientSize.Width - lv.Columns[1].Width - lv.Columns[2].Width - 40;
+            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
+            lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
+            sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
         }
 
         private void form_ResizeEnd(object sender, EventArgs e)
@@ -427,7 +561,7 @@ namespace miniExplorer
             }
         }
 
-        private void lv_DragEnter(object sender, DragEventArgs e)
+        private void sc_DragEnter(object sender, DragEventArgs e)
         {
             if (e.Data.GetDataPresent(DataFormats.FileDrop))
             {
@@ -438,10 +572,10 @@ namespace miniExplorer
                 this.ClientSize = fullSize;
             }
             this.Activate();
-            lv.Select();
+            lvFile.Select();
         }
 
-        private void lv_DragLeave(object sender, EventArgs e)
+        private void sc_DragLeave(object sender, EventArgs e)
         {
             if (!alwaysOpen)
             {
@@ -480,15 +614,19 @@ namespace miniExplorer
             }
         }
 
-        private void lv_DragOver(object sender, DragEventArgs e)
+        private void lvFolder_DragOver(object sender, DragEventArgs e)
         {
-            ListView lv = sender as ListView;
-            Point point = lv.PointToClient(new Point(e.X, e.Y));
-            ListViewItem item = lv.GetItemAt(point.X, point.Y);
+            ListView lvFolder = sender as ListView;
+            Point point = lvFolder.PointToClient(new Point(e.X, e.Y));
+            ListViewItem item = lvFolder.GetItemAt(point.X, point.Y);
             if (item != null)
             {
                 item.Focused = true;
             }
+        }
+        private void lvFile_DragOver(object sender, DragEventArgs e)
+        {
+            lvFile.Focus();
         }
 
         private void lv_DragDrop(object sender, DragEventArgs e)
@@ -496,38 +634,86 @@ namespace miniExplorer
             ListView lv = sender as ListView;
             Point point = lv.PointToClient(new Point(e.X, e.Y));
             ListViewItem item = lv.GetItemAt(point.X, point.Y);
-            string destinationDirectory = item == null ? this.dirPath : (string)item.SubItems[0].Tag;
+            string destinationDirectory;
+            if (item == null || File.Exists((string)item.SubItems[0].Tag))
+                destinationDirectory = this.dirPath;
+            else
+                destinationDirectory = (string)item.SubItems[0].Tag;
             if (!Directory.Exists(destinationDirectory)) return;
             lv.SelectedItems.Clear();
             if (item != null) item.Selected = true;
             string[] sourceNames = (string[])e.Data.GetData(DataFormats.FileDrop);
+            watcher.EnableRaisingEvents = false;
             foreach (string sourceName in sourceNames)
             {
                 string destinationName = Path.Combine(destinationDirectory, Path.GetFileName(sourceName));
-                if (File.Exists(sourceName))
-                {
-                    FileSystem.MoveFile(sourceName, destinationName, UIOption.AllDialogs);
-                }
-                if (Directory.Exists(sourceName))
-                {
-                    watcher.EnableRaisingEvents = false;
-                    FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs);
-                    refreshList();
-                    watcher.EnableRaisingEvents = true;
-                }
+                if (sourceName == destinationName) continue;
+                FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, DragDropEffects.Move);
             }
+            refreshList();
+            watcher.EnableRaisingEvents = true;
         }
 
         private void lv_ItemDrag(object sender, ItemDragEventArgs e)
         {
-            ListView lv = sender as ListView;
             List<string> paths = new List<string>();
-            foreach (ListViewItem item in lv.SelectedItems)
-            {
+            foreach (ListViewItem item in lvFile.SelectedItems)
                 paths.Add((string)item.SubItems[0].Tag);
-            }
+            foreach (ListViewItem item in lvFolder.SelectedItems)
+                paths.Add((string)item.SubItems[0].Tag);
             DataObject fileData = new DataObject(DataFormats.FileDrop, paths.ToArray());
             DoDragDrop(fileData, DragDropEffects.All);
+        }
+
+        private void lv_KeyDown(object sender, KeyEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            if (e.Control && e.KeyCode == Keys.V)
+            {
+                StringCollection dropList = Clipboard.GetFileDropList();
+                if (dropList == null || dropList.Count == 0) return;
+
+                string destinationDirectory = this.dirPath;
+                DragDropEffects effect = DragDropEffects.Copy;
+
+                if (Clipboard.GetData("Preferred DropEffect") != null)
+                {
+                    MemoryStream effectMS = (MemoryStream)Clipboard.GetData("Preferred DropEffect");
+                    byte[] effectByte = new byte[4];
+                    effectMS.Read(effectByte, 0, effectByte.Length);
+                    effect = (DragDropEffects)BitConverter.ToInt32(effectByte, 0);
+                }
+
+                foreach (string sourceName in dropList)
+                {
+                    string destinationName = Path.Combine(destinationDirectory, Path.GetFileName(sourceName));
+                    FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, effect);
+                }
+            }
+            if (e.Control && (e.KeyCode == Keys.C || e.KeyCode == Keys.X))
+            {
+                DragDropEffects effect = e.KeyCode == Keys.C ? DragDropEffects.Copy : DragDropEffects.Move;
+                StringCollection dropList = new StringCollection();
+                foreach (ListViewItem item in lvFolder.SelectedItems)
+                    dropList.Add((string)item.SubItems[0].Tag);
+                foreach (ListViewItem item in lvFile.SelectedItems)
+                    dropList.Add((string)item.SubItems[0].Tag);
+                DataObject data = new DataObject();
+                data.SetFileDropList(dropList);
+                data.SetData("Preferred DropEffect", new MemoryStream(BitConverter.GetBytes((int)effect)));
+                Clipboard.SetDataObject(data);
+            }
+            else if (e.KeyCode == Keys.Delete)
+            {
+                foreach (ListViewItem item in lv.SelectedItems)
+                {
+                    string fullPath = (string)item.SubItems[0].Tag;
+                    if (e.Shift)
+                        FileSystemHelper.DeleteFileSystemItem(fullPath, RecycleOption.DeletePermanently);
+                    else
+                        FileSystemHelper.DeleteFileSystemItem(fullPath, RecycleOption.SendToRecycleBin);
+                }
+            }
         }
 
         private void tb_KeyDown(object sender, KeyEventArgs e)
@@ -578,14 +764,19 @@ DpiChangedEventArgs e)
             this.MinimumSize = new Size(75 * dpiScale, 75 * this.dpiScale);
         }
 
+        private void sc_DpiChangedAfterParent(object sender, EventArgs e)
+        {
+            sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
+            sc.Location = new Point(0, 18 * this.dpiScale);
+            refreshList();
+        }
         private void lv_DpiChangedAfterParent(object sender, EventArgs e)
         {
+            ListView lv = sender as ListView;
             lv.SmallImageList.ImageSize = new Size(
                 16 * this.dpiScale,
                 16 * this.dpiScale
             );
-            lv.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
-            lv.Location = new Point(0, 18 * this.dpiScale);
             refreshList();
         }
 
@@ -620,10 +811,14 @@ DpiChangedEventArgs e)
             ChangeDirDialog();
         }
 
-        private void lv_DoubleClick(object sender, MouseEventArgs e)
+        private void sc_DoubleClick(object sender, MouseEventArgs e)
         {
-            ListView lv = sender as ListView;
-            ListViewItem item = lv.FocusedItem;
+            sc.SplitterDistance = Math.Min(sc.Height / 2, (lvFolder.Items.Count + 2) * lvFolder.GetItemRect(1).Height);
+        }
+
+        private void lvFolder_DoubleClick(object sender, MouseEventArgs e)
+        {
+            ListViewItem item = lvFolder.FocusedItem;
             string fullPath = (string)item.SubItems[0].Tag;
             if (
                 e.Button == MouseButtons.Right && item.SubItems[0].Text == ".." ||
@@ -632,43 +827,34 @@ DpiChangedEventArgs e)
             {
                 ChangeDirDialog();
             }
-            else if (e.Button == MouseButtons.Left)
+            else if (e.Button == MouseButtons.Left && Directory.Exists(fullPath))
             {
-                if (Directory.Exists(fullPath))
-                {
-                    this.dirPath = fullPath;
-                    refreshList();
-                }
-                else if (File.Exists(fullPath))
-                {
-                    Process.Start(new ProcessStartInfo(fullPath) { UseShellExecute = true });
-                }
+                this.dirPath = fullPath;
+                refreshList();
             }
         }
 
-        private void lv_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        private void lvFile_DoubleClick(object sender, MouseEventArgs e)
         {
-            ListView lv = sender as ListView;
-            ListViewItem focusedItem = lv.FocusedItem;
+            ListViewItem item = lvFile.FocusedItem;
+            string fullPath = (string)item.SubItems[0].Tag;
+            if (e.Button == MouseButtons.Left && File.Exists(fullPath))
+            {
+                Process.Start(new ProcessStartInfo(fullPath) { UseShellExecute = true });
+            }
+        }
+
+
+        private void lvFolder_AfterLabelEdit(object sender, LabelEditEventArgs e)
+        {
+            ListView lvFolder = sender as ListView;
+            ListViewItem focusedItem = lvFolder.FocusedItem;
             if (e.Label == null) return;
             string sourceName = (string)focusedItem.SubItems[0].Tag;
             string destinationName = Path.Combine(this.dirPath, e.Label);
             if (sourceName != destinationName)
             {
-                if (File.Exists(sourceName))
-                {
-                    if (Directory.Exists(destinationName))
-                        MessageBox.Show("指定的文件名与已存在的文件夹重名。请指定其他名称。", "重命名文件");
-                    else
-                    {
-                        FileSystem.MoveFile(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
-                        if (File.Exists(sourceName))
-                            e.CancelEdit = true;
-                        else
-                            focusedItem.SubItems[0].Tag = destinationName;
-                    }
-                }
-                else if (Directory.Exists(sourceName))
+                if (Directory.Exists(sourceName))
                 {
                     if (File.Exists(destinationName))
                         MessageBox.Show("指定的文件夹名与已存在的文件重名。请指定其他名称。", "重命名文件夹");
@@ -699,53 +885,44 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
                         FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
                         e.CancelEdit = true;
                         if (!Directory.Exists(sourceName))
-                            lv.Items.Remove(focusedItem);
+                            lvFolder.Items.Remove(focusedItem);
                         watcher.EnableRaisingEvents = true;
-                    }else{
+                    }
+                    else
+                    {
                         e.CancelEdit = true;
                     }
                 }
             }
         }
-
-        private void lv_KeyDown(object sender, KeyEventArgs e)
+        private void lvFile_AfterLabelEdit(object sender, LabelEditEventArgs e)
         {
-            ListView lv = sender as ListView;
-            if (e.Control && e.KeyCode == Keys.C)
+            ListView lvFile = sender as ListView;
+            ListViewItem focusedItem = lvFile.FocusedItem;
+            if (e.Label == null) return;
+            string sourceName = (string)focusedItem.SubItems[0].Tag;
+            string destinationName = Path.Combine(this.dirPath, e.Label);
+            if (sourceName != destinationName)
             {
-                StringCollection paths = new StringCollection();
-                foreach (ListViewItem item in lv.SelectedItems)
+                if (File.Exists(sourceName))
                 {
-                    paths.Add((string)item.SubItems[0].Tag);
-                }
-                Clipboard.SetFileDropList(paths);
-            }
-            else if (e.KeyCode == Keys.Delete)
-            {
-                foreach (ListViewItem item in lv.SelectedItems)
-                {
-                    string fullPath = (string)item.SubItems[0].Tag;
-                    if (e.Shift)
-                    {
-                        if (File.Exists(fullPath))
-                            FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently, UICancelOption.DoNothing);
-                        else if (Directory.Exists(fullPath))
-                            FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.DeletePermanently, UICancelOption.DoNothing);
-                    }
+                    if (Directory.Exists(destinationName))
+                        MessageBox.Show("指定的文件名与已存在的文件夹重名。请指定其他名称。", "重命名文件");
                     else
                     {
-                        if (File.Exists(fullPath))
-                            FileSystem.DeleteFile(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.DoNothing);
-                        else if (Directory.Exists(fullPath))
-                            FileSystem.DeleteDirectory(fullPath, UIOption.AllDialogs, RecycleOption.SendToRecycleBin, UICancelOption.DoNothing);
+                        FileSystem.MoveFile(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);
+                        if (File.Exists(sourceName))
+                            e.CancelEdit = true;
+                        else
+                            focusedItem.SubItems[0].Tag = destinationName;
                     }
-
                 }
             }
         }
 
         private void lv_MouseClick(object sender, MouseEventArgs e)
         {
+            ListView lv = sender as ListView;
             if (e.Button == MouseButtons.Right)
             {
                 var item = lv.FocusedItem;
@@ -758,21 +935,40 @@ $@"此目标已包含名为“{e.Label}”的文件夹。
             }
         }
 
-        private void lv_ColumnClick(object sender, ColumnClickEventArgs e)
+        private void lvFolder_ColumnClick(object sender, ColumnClickEventArgs e)
         {
             ListView lv = sender as ListView;
-            ListViewColumnSorter lvwColumnSorter = lv.ListViewItemSorter as ListViewColumnSorter;
-            if (e.Column == lvwColumnSorter.SortColumn)
+            DirectoryListViewColumnSorter lvColumnSorter = lv.ListViewItemSorter as DirectoryListViewColumnSorter;
+            if (e.Column == lvColumnSorter.SortColumn)
             {
-                if (lvwColumnSorter.Order == SortOrder.Ascending)
-                    lvwColumnSorter.Order = SortOrder.Descending;
+                if (lvColumnSorter.Order == SortOrder.Ascending)
+                    lvColumnSorter.Order = SortOrder.Descending;
                 else
-                    lvwColumnSorter.Order = SortOrder.Ascending;
+                    lvColumnSorter.Order = SortOrder.Ascending;
             }
             else
             {
-                lvwColumnSorter.SortColumn = e.Column;
-                lvwColumnSorter.Order = SortOrder.Ascending;
+                lvColumnSorter.SortColumn = e.Column;
+                lvColumnSorter.Order = SortOrder.Ascending;
+            }
+            lv.Sort();
+        }
+
+        private void lvFile_ColumnClick(object sender, ColumnClickEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            FileListViewColumnSorter lvColumnSorter = lv.ListViewItemSorter as FileListViewColumnSorter;
+            if (e.Column == lvColumnSorter.SortColumn)
+            {
+                if (lvColumnSorter.Order == SortOrder.Ascending)
+                    lvColumnSorter.Order = SortOrder.Descending;
+                else
+                    lvColumnSorter.Order = SortOrder.Ascending;
+            }
+            else
+            {
+                lvColumnSorter.SortColumn = e.Column;
+                lvColumnSorter.Order = SortOrder.Ascending;
             }
             lv.Sort();
         }
