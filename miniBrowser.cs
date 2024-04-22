@@ -147,8 +147,8 @@ namespace miniExplorer
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
-            this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
+            if (sc.Visible) this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
             sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
             sc.Location = new Point(0, 18 * this.dpiScale);
@@ -160,7 +160,7 @@ namespace miniExplorer
                 16 * this.dpiScale,
                 16 * this.dpiScale
             );
-            refreshForm();
+            if (sc.Visible) refreshForm();
         }
 
         protected override void WndProc(ref Message m)
@@ -444,6 +444,7 @@ namespace miniExplorer
             this.MaximumSize = new Size(0, 0);
             this.ClientSize = fullSize;
             this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
+            refreshForm();
         }
 
         private void form_ResizeEnd(object sender, EventArgs e)
@@ -662,6 +663,7 @@ namespace miniExplorer
         private void form_Load(object sender, EventArgs e)
         {
             this.Location = Properties.Settings.Default.WindowLocation;
+            this.ClientSize = Properties.Settings.Default.FullSize;
             watcher.EnableRaisingEvents = true;
         }
 
