@@ -12,115 +12,129 @@ using Microsoft.VisualBasic.FileIO;
 using ShellApp;
 using System.Reflection;
 
-public class ListViewWithoutScrollBar : ListView
-{
-    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
-    public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Auto)]
-    public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    const int GWL_STYLE = -16;
-    const int WM_NCCALCSIZE = 0x83;
-    const int WS_VSCROLL = 0x200000;
-    const int WS_HSCROLL = 0x100000;
-
-    protected override void WndProc(ref Message m)
-    {
-        switch (m.Msg)
-        {
-            case WM_NCCALCSIZE:
-                int style = (int)GetWindowLongPtr64(this.Handle, GWL_STYLE);
-                if ((style & WS_HSCROLL) == WS_HSCROLL)
-                    style &= ~WS_HSCROLL;
-                SetWindowLongPtr64(this.Handle, GWL_STYLE, style);
-                base.WndProc(ref m);
-                break;
-            default:
-                base.WndProc(ref m);
-                break;
-        }
-    }
-}
-
-public class DirectoryListViewColumnSorter : IComparer
-{
-    public int SortColumn;
-    public SortOrder Order;
-    public DirectoryListViewColumnSorter()
-    {
-        SortColumn = 1;
-        Order = SortOrder.None;
-    }
-    public int Compare(object x, object y)
-    {
-        int compareResult;
-        ListViewItem listviewX, listviewY;
-        listviewX = (ListViewItem)x;
-        listviewY = (ListViewItem)y;
-        CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
-        if (listviewX.SubItems[0].Text == "..") return -1;
-        if (listviewY.SubItems[0].Text == "..") return 1;
-        compareResult = ObjectCompare.Compare(
-                listviewX.SubItems[SortColumn].Text,
-                listviewY.SubItems[SortColumn].Text
-            );
-        if (SortColumn == 1) compareResult = -compareResult;
-        if (Order == SortOrder.Ascending)
-            return compareResult;
-        else if (Order == SortOrder.Descending)
-            return -compareResult;
-        else
-            return 0;
-    }
-}
-
-public class FileListViewColumnSorter : IComparer
-{
-    public int SortColumn;
-    public SortOrder Order;
-    public FileListViewColumnSorter()
-    {
-        SortColumn = 1;
-        Order = SortOrder.None;
-    }
-    public int Compare(object x, object y)
-    {
-        int compareResult;
-        ListViewItem listviewX, listviewY;
-        listviewX = (ListViewItem)x;
-        listviewY = (ListViewItem)y;
-        CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
-        if (SortColumn == 3)
-        {
-            compareResult = ObjectCompare.Compare(
-                listviewX.SubItems[SortColumn].Tag,
-                listviewY.SubItems[SortColumn].Tag
-            );
-        }
-        else
-        {
-            compareResult = ObjectCompare.Compare(
-                listviewX.SubItems[SortColumn].Text,
-                listviewY.SubItems[SortColumn].Text
-            );
-        }
-        if (SortColumn == 2) compareResult = -compareResult;
-        if (Order == SortOrder.Ascending)
-            return compareResult;
-        else if (Order == SortOrder.Descending)
-            return -compareResult;
-        else
-            return 0;
-    }
-}
 
 namespace miniExplorer
 {
+    public class ListViewWithoutScrollBar : ListView
+    {
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", CharSet = CharSet.Auto)]
+        public static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", CharSet = CharSet.Auto)]
+        public static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        const int GWL_STYLE = -16;
+        const int WM_NCCALCSIZE = 0x83;
+        const int WS_VSCROLL = 0x200000;
+        const int WS_HSCROLL = 0x100000;
+
+        protected override void WndProc(ref Message m)
+        {
+            switch (m.Msg)
+            {
+                case WM_NCCALCSIZE:
+                    int style = (int)GetWindowLongPtr64(this.Handle, GWL_STYLE);
+                    if ((style & WS_HSCROLL) == WS_HSCROLL)
+                        style &= ~WS_HSCROLL;
+                    SetWindowLongPtr64(this.Handle, GWL_STYLE, style);
+                    base.WndProc(ref m);
+                    break;
+                default:
+                    base.WndProc(ref m);
+                    break;
+            }
+        }
+    }
+
+    public class DirectoryListViewColumnSorter : IComparer
+    {
+        public int SortColumn;
+        public SortOrder Order;
+        public DirectoryListViewColumnSorter()
+        {
+            SortColumn = 1;
+            Order = SortOrder.None;
+        }
+        public int Compare(object x, object y)
+        {
+            int compareResult;
+            ListViewItem listviewX, listviewY;
+            listviewX = (ListViewItem)x;
+            listviewY = (ListViewItem)y;
+            CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
+            if (listviewX.SubItems[0].Text == "..") return -1;
+            if (listviewY.SubItems[0].Text == "..") return 1;
+            compareResult = ObjectCompare.Compare(
+                    listviewX.SubItems[SortColumn].Text,
+                    listviewY.SubItems[SortColumn].Text
+                );
+            if (SortColumn == 1) compareResult = -compareResult;
+            if (Order == SortOrder.Ascending)
+                return compareResult;
+            else if (Order == SortOrder.Descending)
+                return -compareResult;
+            else
+                return 0;
+        }
+    }
+
+    public class FileListViewColumnSorter : IComparer
+    {
+        public int SortColumn;
+        public SortOrder Order;
+        public FileListViewColumnSorter()
+        {
+            SortColumn = 1;
+            Order = SortOrder.None;
+        }
+        public int Compare(object x, object y)
+        {
+            int compareResult;
+            ListViewItem listviewX, listviewY;
+            listviewX = (ListViewItem)x;
+            listviewY = (ListViewItem)y;
+            CaseInsensitiveComparer ObjectCompare = new CaseInsensitiveComparer();
+            if (SortColumn == 3)
+            {
+                compareResult = ObjectCompare.Compare(
+                    listviewX.SubItems[SortColumn].Tag,
+                    listviewY.SubItems[SortColumn].Tag
+                );
+            }
+            else
+            {
+                compareResult = ObjectCompare.Compare(
+                    listviewX.SubItems[SortColumn].Text,
+                    listviewY.SubItems[SortColumn].Text
+                );
+            }
+            if (SortColumn == 2) compareResult = -compareResult;
+            if (Order == SortOrder.Ascending)
+                return compareResult;
+            else if (Order == SortOrder.Descending)
+                return -compareResult;
+            else
+                return 0;
+        }
+    }
     public partial class miniBrowser : Form
     {
+        private string dirPath;
+        private SplitContainer sc;
+        private ListViewWithoutScrollBar lvFile;
+        private ListViewWithoutScrollBar lvFolder;
+        private TextBox tb;
+        private FileSystemWatcher watcher;
+        private ShellContextMenu ctxMnu = new ShellContextMenu();
+
+        private Size fullSize;
+        private DpiFactor dpiScale;
+
+        private bool allowFold = false;
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            fullSize = new Size(this.ClientSize.Width, Math.Max(this.ClientSize.Height, 150 * dpiScale));
             Properties.Settings.Default.FullSize = this.fullSize;
             Properties.Settings.Default.LastDirPath = this.dirPath;
             Properties.Settings.Default.WindowLocation = this.Location;
@@ -129,20 +143,11 @@ namespace miniExplorer
             base.OnFormClosing(e);
             watcher.Dispose();
         }
-        protected override void OnDragLeave(EventArgs e)
-        {
 
-            if (this.ClientRectangle.Contains(this.PointToClient(Control.MousePosition)))
-                return;
-            else
-            {
-                base.OnDragLeave(e);
-            }
-        }
         protected override void OnDpiChanged(DpiChangedEventArgs e)
         {
             base.OnDpiChanged(e);
-            this.MinimumSize = new Size(75 * dpiScale, 0);
+            this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
             this.dpiScale = new DpiFactor(e.DeviceDpiNew / 96.0f);
             tb.Size = new Size(this.ClientSize.Width, 18 * this.dpiScale);
             sc.Size = new Size(this.ClientSize.Width, this.ClientSize.Height - 18 * this.dpiScale);
@@ -155,21 +160,8 @@ namespace miniExplorer
                 16 * this.dpiScale,
                 16 * this.dpiScale
             );
-            refreshList();
+            refreshForm();
         }
-
-        private string dirPath;
-        private SplitContainer sc;
-        private ListViewWithoutScrollBar lvFile;
-        private ListViewWithoutScrollBar lvFolder;
-        private TextBox tb;
-        private FileSystemWatcher watcher;
-        private ShellContextMenu ctxMnu = new ShellContextMenu();
-
-        private Size fullSize;
-        private DpiFactor dpiScale;
-
-        private bool windowOpen = true;
 
         protected override void WndProc(ref Message m)
         {
@@ -184,7 +176,11 @@ namespace miniExplorer
                     break;
                 case WM_NCLBUTTONDBLCLK:
                 case WM_NCRBUTTONDOWN:
-                    FormToggleBody();
+                    allowFold = !allowFold;
+                    if (allowFold)
+                        this.Fold();
+                    else
+                        this.Unfold();
                     break;
                 default:
                     base.WndProc(ref m);
@@ -229,7 +225,8 @@ namespace miniExplorer
             this.KeyPreview = true;
             this.AutoScaleMode = AutoScaleMode.Dpi;
             this.dpiScale = new DpiFactor(this.DeviceDpi / 96.0f);
-            this.MinimumSize = new Size(75 * dpiScale, 0);
+            this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
+            this.Font = SystemFonts.CaptionFont;
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("miniExplorer.Resources.miniExplorer.ico"))
             {
                 this.Icon = new Icon(stream);
@@ -240,7 +237,9 @@ namespace miniExplorer
                 AllowDrop = true,
                 AutoSize = false,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                Size = new Size(this.ClientSize.Width, 18 * this.dpiScale)
+                Size = new Size(this.ClientSize.Width, 18 * this.dpiScale),
+                AutoCompleteMode = AutoCompleteMode.Append,
+                AutoCompleteSource = AutoCompleteSource.CustomSource
             };
 
             sc = new SplitContainer()
@@ -295,15 +294,16 @@ namespace miniExplorer
             sc.Panel2.Controls.Add(lvFile);
 
             tb.KeyDown += new KeyEventHandler(tb_KeyDown);
+            tb.KeyUp += new KeyEventHandler(tb_KeyUp);
             tb.DragEnter += new DragEventHandler(tb_DragEnter);
             tb.DragDrop += new DragEventHandler(tb_DragDrop);
 
             sc.DragEnter += new DragEventHandler(sc_DragEnter);
             lvFolder.DragEnter += new DragEventHandler(sc_DragEnter);
             lvFile.DragEnter += new DragEventHandler(sc_DragEnter);
-            sc.DragLeave += new EventHandler(sc_DragLeave);
-            lvFolder.DragLeave += new EventHandler(sc_DragLeave);
-            lvFile.DragLeave += new EventHandler(sc_DragLeave);
+            sc.DragLeave += new EventHandler(form_DragLeave);
+            lvFolder.DragLeave += new EventHandler(form_DragLeave);
+            lvFile.DragLeave += new EventHandler(form_DragLeave);
 
             sc.MouseDoubleClick += new MouseEventHandler(sc_DoubleClick);
 
@@ -326,6 +326,8 @@ namespace miniExplorer
             lvFile.ColumnClick += new ColumnClickEventHandler(lvFile_ColumnClick);
             lvFile.AfterLabelEdit += new LabelEditEventHandler(lvFile_AfterLabelEdit);
 
+            this.DragEnter += new DragEventHandler(form_DragEnter);
+            this.DragLeave += new EventHandler(form_DragLeave);
             this.ResizeEnd += new EventHandler(form_ResizeEnd);
             this.KeyDown += new KeyEventHandler(form_KeyDown);
             this.Resize += new EventHandler(form_Resize);
@@ -335,12 +337,10 @@ namespace miniExplorer
             this.Controls.Add(sc);
             lvFile.Select();
             this.ResumeLayout(false);
-            refreshList();
+            refreshForm();
         }
 
-
-
-        public void refreshList()
+        public void refreshForm()
         {
             this.Text = tb.Text = this.watcher.Path = this.dirPath;
             DirectoryInfo dirInfo = new DirectoryInfo(this.dirPath);
@@ -363,10 +363,6 @@ namespace miniExplorer
                 item.SubItems.Add(folder.LastWriteTime.ToString("yyyy/MM/dd hh:mm"));
                 lvFolder.Items.Add(item);
             }
-            lvFolder.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
-            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
-            lvFolder.EndUpdate();
-            sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
 
             lvFile.Items.Clear();
             lvFile.SmallImageList.Images.Clear();
@@ -395,10 +391,16 @@ namespace miniExplorer
 
                 lvFile.Items.Add(item);
             }
+
+            lvFolder.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
+            lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
             lvFile.AutoResizeColumn(1, ColumnHeaderAutoResizeStyle.ColumnContent);
             lvFile.AutoResizeColumn(2, ColumnHeaderAutoResizeStyle.ColumnContent);
             lvFile.AutoResizeColumn(3, ColumnHeaderAutoResizeStyle.ColumnContent);
             lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
+            sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
+
+            lvFolder.EndUpdate();
             lvFile.EndUpdate();
         }
 
@@ -406,35 +408,59 @@ namespace miniExplorer
         {
             FileSystemWatcher watcher = sender as FileSystemWatcher;
             watcher.EnableRaisingEvents = false;
-            refreshList();
+            refreshForm();
             watcher.EnableRaisingEvents = true;
         }
 
         private void watcher_FileInfoChange(object sender, RenamedEventArgs e)
         {
-            refreshList();
+            refreshForm();
         }
 
         private void form_Resize(object sender, EventArgs e)
         {
             lvFolder.Columns[0].Width = this.ClientSize.Width - lvFolder.Columns[1].Width - 40;
             lvFile.Columns[0].Width = this.ClientSize.Width - lvFile.Columns[1].Width - lvFile.Columns[2].Width - lvFile.Columns[3].Width - 40;
-            if (this.ClientSize.Height > 75 * dpiScale)
+            if (sc.Visible)
             {
                 sc.SplitterDistance = Math.Min(sc.Height / 2, Math.Max(lvFolder.Items.Count + 2, 4) * lvFolder.GetItemRect(0).Height);
             }
         }
 
+        public void Fold()
+        {
+            sc.Hide();
+            tb.Hide();
+            this.MinimumSize = new Size(150 * dpiScale, 0);
+            this.MaximumSize = new Size(int.MaxValue, 0);
+            this.ClientSize = new Size(fullSize.Width, 0);
+        }
+
+        public void Unfold()
+        {
+            tb.Show();
+            sc.Show();
+            sc.Focus();
+            this.MaximumSize = new Size(0, 0);
+            this.ClientSize = fullSize;
+            this.MinimumSize = new Size(150 * dpiScale, 150 * dpiScale);
+        }
+
         private void form_ResizeEnd(object sender, EventArgs e)
         {
-            if (windowOpen)
-            {
-                fullSize = new Size(this.ClientSize.Width, Math.Max(this.ClientSize.Height, 150 * dpiScale));
-            }
-            else
-            {
-                fullSize = new Size(this.ClientSize.Width, fullSize.Height);
-            }
+            fullSize = this.ClientSize;
+        }
+
+        private void form_DragEnter(object sender, DragEventArgs e)
+        {
+            if (allowFold)
+                Unfold();
+        }
+
+        private void form_DragLeave(object sender, EventArgs e)
+        {
+            if (allowFold & !this.ClientRectangle.Contains(this.PointToClient(Control.MousePosition)))
+                Fold();
         }
 
         private void sc_DragEnter(object sender, DragEventArgs e)
@@ -443,49 +469,8 @@ namespace miniExplorer
             {
                 e.Effect = DragDropEffects.Move;
             }
-            if (!windowOpen)
-            {
-                this.ClientSize = fullSize;
-            }
             this.Activate();
             lvFile.Select();
-        }
-
-        private void sc_DragLeave(object sender, EventArgs e)
-        {
-            if (!windowOpen)
-            {
-                this.ClientSize = new Size(fullSize.Width, 0);
-            }
-        }
-
-        private void FormHideBody()
-        {
-            this.MaximumSize = new Size(int.MaxValue, 0);
-            sc.Hide();
-            tb.Hide();
-            this.ClientSize = new Size(fullSize.Width, 0);
-        }
-
-        private void FormShowBody()
-        {
-            this.MaximumSize = new Size(0, 0);
-            this.ClientSize = fullSize;
-            sc.Show();
-            tb.Show();
-        }
-
-        public void FormToggleBody()
-        {
-            windowOpen = !windowOpen;
-            if (windowOpen)
-            {
-                FormShowBody();
-            }
-            else
-            {
-                FormHideBody();
-            }
         }
 
         private void tb_DragEnter(object sender, DragEventArgs e)
@@ -494,21 +479,34 @@ namespace miniExplorer
             {
                 e.Effect = DragDropEffects.Move;
             }
+            else if (e.Data.GetDataPresent(DataFormats.Text))
+            {
+                e.Effect = DragDropEffects.Copy;
+            }
             this.Activate();
             tb.Select();
         }
 
         private void tb_DragDrop(object sender, DragEventArgs e)
         {
-            string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
-            foreach (string file in files)
+            string[] formats = e.Data.GetFormats(false);
+            string path = "";
+
+            if (formats.Contains("Text"))
             {
-                if (Directory.Exists(file))
-                {
-                    this.dirPath = file;
-                    refreshList();
-                    return;
-                }
+                path = (string)e.Data.GetData(DataFormats.Text);
+            }
+            else if (formats.Contains("FileDrop"))
+            {
+                string[] paths = (string[])e.Data.GetData(DataFormats.FileDrop);
+                path = paths[0];
+                if (File.Exists(path))
+                    path = Path.GetDirectoryName(path);
+            }
+            if (Directory.Exists(path))
+            {
+                this.dirPath = path;
+                refreshForm();
             }
         }
 
@@ -522,6 +520,7 @@ namespace miniExplorer
                 item.Focused = true;
             }
         }
+
         private void lvFile_DragOver(object sender, DragEventArgs e)
         {
             lvFile.Focus();
@@ -537,7 +536,8 @@ namespace miniExplorer
                 destinationDirectory = this.dirPath;
             else
                 destinationDirectory = (string)item.SubItems[0].Tag;
-            if (!Directory.Exists(destinationDirectory)) return;
+            if (!Directory.Exists(destinationDirectory))
+                return;
             lv.SelectedItems.Clear();
             if (item != null) item.Selected = true;
             string[] sourceNames = (string[])e.Data.GetData(DataFormats.FileDrop);
@@ -548,7 +548,7 @@ namespace miniExplorer
                 if (sourceName == destinationName) continue;
                 FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, DragDropEffects.Move);
             }
-            refreshList();
+            refreshForm();
             watcher.EnableRaisingEvents = true;
         }
 
@@ -621,7 +621,7 @@ namespace miniExplorer
                 if (Directory.Exists(tb.Text))
                 {
                     this.dirPath = tb.Text;
-                    refreshList();
+                    refreshForm();
                 }
                 else
                 {
@@ -629,6 +629,15 @@ namespace miniExplorer
                 }
                 e.Handled = true;
                 e.SuppressKeyPress = true;
+            }
+        }
+
+        private void tb_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (Directory.Exists(tb.Text) && Path.GetFullPath(tb.Text).TrimEnd('\\') != Path.GetFullPath(dirPath).TrimEnd('\\'))
+            {
+                this.dirPath = Path.GetFullPath(tb.Text);
+                refreshForm();
             }
         }
 
@@ -667,9 +676,19 @@ namespace miniExplorer
                 )
                 {
                     this.dirPath = folderDialog.SelectedPath;
-                    refreshList();
+                    refreshForm();
                 }
             }
+        }
+
+        public void OnMouseEnterWindow()
+        {
+            if (allowFold) Unfold();
+        }
+
+        public void OnMouseLeaveWindow()
+        {
+            if (allowFold) Fold();
         }
 
         private void sc_DoubleClick(object sender, MouseEventArgs e)
@@ -691,7 +710,7 @@ namespace miniExplorer
             else if (e.Button == MouseButtons.Left && Directory.Exists(fullPath))
             {
                 this.dirPath = fullPath;
-                refreshList();
+                refreshForm();
             }
         }
 

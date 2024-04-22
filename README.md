@@ -17,7 +17,7 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 * Native file/folder name/icon support
 * High DPI support
 * Remember last window location
-* Mini size mode
+* Auto fold mode
 * Drag/drop support
 
 ## Usage
@@ -26,7 +26,7 @@ And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
 
 |                | double click           | right click           | right double click | drag              | drag file/folder into      |
 |----------------|------------------------|-----------------------|--------------------|-------------------|----------------------------|
-| title bar      | toggle half size mode  | toggle half size mode | /                  | (move window)     | /                          |
+| title bar      | toggle auto fold mode  | toggle auto fold mode | /                  | (move window)     | /                          |
 | address bar    | /                      | /                     | /                  | /                 | change directory           |
 | item `..`      | go to parent directory | /                     | select directory   | /                 | move into parent directory |
 | file item      | open file              | context menu          | /                  | file dragged      | /                          |
