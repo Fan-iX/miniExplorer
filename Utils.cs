@@ -73,10 +73,11 @@ public class ShellInfoHelper
     public const uint SHGFI_ICON = 0x100;
     public const uint SHGFI_LARGEICON = 0x0;
     public const uint SHGFI_SMALLICON = 0x1;
+    public const uint SHGFI_USEFILEATTRIBUTES = 0x10;
     public const uint SHGFI_SYSICONINDEX = 0x4000;
 
-    [StructLayout(LayoutKind.Sequential)]
-    public struct SHFILEINFO
+    [StructLayoutAttribute(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct SHFILEINFOW
     {
         public IntPtr hIcon;
         public int iIcon;
@@ -97,26 +98,40 @@ public class ShellInfoHelper
                                                                                           IntPtr hToken);
 
     [DllImport("shell32")]
-    public static extern IntPtr SHGetFileInfo(string pszPath,
+    public static extern IntPtr SHGetFileInfoW([MarshalAs(UnmanagedType.LPWStr)] string pszPath,
                                               uint dwFileAttributes,
-                                              out SHFILEINFO psfi,
+                                              out SHFILEINFOW psfi,
                                               uint cbSizeFileInfo,
                                               uint uFlags);
+    [DllImport("user32")]
+    public static extern int DestroyIcon(IntPtr hIcon);
 
-    public static Image GetIconFromPath(string pszPath)
+    public static Image GetIconFromPath(string pszPath, bool simallIcon = true)
     {
-        SHFILEINFO info = new SHFILEINFO();
-        SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_ICON | SHGFI_SMALLICON);
+        SHFILEINFOW info = new SHFILEINFOW();
+        uint flag = SHGFI_ICON;
+        flag |= simallIcon ? SHGFI_SMALLICON : SHGFI_LARGEICON;
+        if (!Directory.Exists(pszPath)) flag |= SHGFI_USEFILEATTRIBUTES;
+        SHGetFileInfoW(pszPath, 0, out info, (uint)Marshal.SizeOf(info), flag);
         if (info.hIcon == (IntPtr)0)
+        {
+            DestroyIcon(info.hIcon);
             return new Bitmap(32, 32);
+        }
         else
-            return Icon.FromHandle(info.hIcon).ToBitmap();
+        {
+            Icon icon = Icon.FromHandle(info.hIcon);
+            Image img = icon.ToBitmap();
+            icon.Dispose();
+            DestroyIcon(info.hIcon);
+            return img;
+        }
     }
 
-    public static string GetDisplayNameFromPath(string pszPath)
+    public static string GetDisplayName(string pszPath)
     {
-        SHFILEINFO info = new SHFILEINFO();
-        SHGetFileInfo(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
+        SHFILEINFOW info = new SHFILEINFOW();
+        SHGetFileInfoW(pszPath, 0, out info, (uint)Marshal.SizeOf(info), SHGFI_DISPLAYNAME);
         return info.szDisplayName;
     }
 
@@ -124,12 +139,15 @@ public class ShellInfoHelper
     {
         var di = new DirectoryInfo(pathName);
 
-        if (di.Parent != null) {
+        if (di.Parent != null)
+        {
             return Path.Combine(
-                GetExactPathName(di.Parent.FullName), 
+                GetExactPathName(di.Parent.FullName),
                 di.Parent.GetFileSystemInfos(di.Name)[0].Name);
-        } else {
-            if(di.FullName.StartsWith("\\\\")||di.FullName.StartsWith("//"))
+        }
+        else
+        {
+            if (di.FullName.StartsWith("\\\\") || di.FullName.StartsWith("//"))
                 return Path.GetPathRoot(di.FullName);
             else
                 return di.Name.ToUpper();
@@ -137,27 +155,49 @@ public class ShellInfoHelper
     }
 }
 
-public class ShellApplication{
-    public static List<string> GetExplorerPaths(){
+public class ShellApplicationHelper
+{
+    public static List<string> GetExplorerPaths()
+    {
         object shellApplication = System.Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application"));
         object windows = shellApplication.GetType().InvokeMember("Windows", System.Reflection.BindingFlags.InvokeMethod, null, shellApplication, null);
-        int windowCounts = (int) windows.GetType().InvokeMember("Count", System.Reflection.BindingFlags.GetProperty, null, windows, null);
-        List<string> output=new List<string>();
-        for (int i = 0; i < windowCounts; i++){
+        int windowCounts = (int)windows.GetType().InvokeMember("Count", System.Reflection.BindingFlags.GetProperty, null, windows, null);
+        List<string> output = new List<string>();
+        for (int i = 0; i < windowCounts; i++)
+        {
             object window = windows.GetType().InvokeMember("Item", System.Reflection.BindingFlags.InvokeMethod, null, windows, new object[] { i });
-            string locationURL = (string) window.GetType().InvokeMember("LocationURL", System.Reflection.BindingFlags.GetProperty, null, window, null);
-            if(locationURL != ""){
+            string locationURL = (string)window.GetType().InvokeMember("LocationURL", System.Reflection.BindingFlags.GetProperty, null, window, null);
+            if (locationURL != "")
+            {
                 output.Add(new Uri(locationURL).LocalPath);
             }
+            Marshal.ReleaseComObject(window);
         };
+        Marshal.ReleaseComObject(windows);
+        Marshal.ReleaseComObject(shellApplication);
         return output;
-    } 
+    }
+}
+
+public class TimeHelper
+{
+    public static void SetTimeout(Action action, int delay)
+    {
+        System.Timers.Timer timer = new System.Timers.Timer(delay);
+        timer.Elapsed += (object sender, System.Timers.ElapsedEventArgs e) =>
+        {
+            action();
+            timer.Stop();
+            timer.Dispose();
+        };
+        timer.Start();
+    }
 }
 
 
 namespace miniExplorer
 {
-    class DpiFactor
+    public class DpiFactor
     {
         private float scaling;
         public DpiFactor(float scale)
@@ -167,6 +207,10 @@ namespace miniExplorer
         public static int operator *(int pt, DpiFactor factor)
         {
             return (int)(pt * factor.scaling);
+        }
+        public static int operator /(int pt, DpiFactor factor)
+        {
+            return (int)(pt / factor.scaling);
         }
     }
 }

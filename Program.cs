@@ -2,12 +2,13 @@ using System;
 using System.Configuration;
 using System.Windows.Forms;
 using System.Collections.Specialized;
+using System.Runtime.InteropServices;
 
 namespace miniExplorer
 {
     static class Program
     {
-        public static miniBrowser browser;
+        public static BrowserForm browser;
         /// <summary>
         ///  The main entry point for the application.
         /// </summary>
@@ -21,18 +22,23 @@ namespace miniExplorer
             }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            browser = new miniBrowser();
+            browser = new BrowserForm();
             Application.AddMessageFilter(new MouseMoveFilter());
             Application.Run(browser);
         }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
+        public static extern void OutputDebugString(string message);
+
         public class MouseMoveFilter : IMessageFilter
         {
             bool mouseOut = true;
             #region IMessageFilter Members
-            private const int WM_MOUSELEAVE = 0x02A3;
-            private const int WM_NCMOUSEMOVE = 0x0A0;
-            private const int WM_MOUSEMOVE = 0x0200;
-            private const int WM_NCMOUSELEAVE = 0x2A2;
+            const int WM_MOUSELEAVE = 0x02A3;
+            const int WM_NCMOUSEMOVE = 0x0A0;
+            const int WM_MOUSEMOVE = 0x0200;
+            const int WM_NCMOUSELEAVE = 0x2A2;
+            const int WM_LBUTTONDOWN = 0x0201;
 
             public bool PreFilterMessage(ref Message m)
             {
