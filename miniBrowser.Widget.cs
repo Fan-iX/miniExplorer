@@ -15,6 +15,7 @@ namespace miniExplorer
         {
             get => new DpiFactor(DeviceDpi / 96.0f);
         }
+        private Size _previousSize;
 
         public PocketForm()
         {
@@ -49,11 +50,18 @@ namespace miniExplorer
             {
                 if (Foldable & !this.ClientRectangle.Contains(this.PointToClient(Control.MousePosition))) Fold();
             });
+            ResizeBegin += new EventHandler((object sender, EventArgs e) =>
+            {
+                _previousSize = ClientSize;
+            });
             ResizeEnd += new EventHandler((object sender, EventArgs e) =>
             {
-                Foldable = false;
-                Folded = false;
-                UnfoldedSize = new Size(ClientSize.Width, Math.Max(ClientSize.Height, 150 * DpiScale));
+                if (ClientSize != _previousSize)
+                {
+                    Foldable = false;
+                    Folded = false;
+                    UnfoldedSize = new Size(ClientSize.Width, Math.Max(ClientSize.Height, 150 * DpiScale));
+                }
             });
         }
 
