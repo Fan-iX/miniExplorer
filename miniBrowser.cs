@@ -624,7 +624,7 @@ namespace miniExplorer
                 if (e.Data.GetDataPresent(DataFormats.FileDrop))
                 {
                     string[] sourcePaths = (string[])e.Data.GetData(DataFormats.FileDrop);
-                    for (int i = 0; i < Items.Count; i++)
+                    for (int i = Items.Count - 1; i >= 0; i--)
                     {
                         item = Items[i];
                         if (sourcePaths.Contains(item.Name))
@@ -702,11 +702,57 @@ namespace miniExplorer
                     }
                 }
             });
+
+            ContextMenuStrip = new ContextMenuStrip()
+            {
+                DropShadowEnabled = false
+            };
+
+            ContextMenuStrip.Items.Add("全选").Click += new EventHandler((object sender, EventArgs e) =>
+            {
+                foreach (ListViewItem item in Items)
+                    item.Selected = true;
+            });
+
+            ContextMenuStrip.Items.Add("全不选").Click += new EventHandler((object sender, EventArgs e) =>
+            {
+                foreach (ListViewItem item in Items)
+                    item.Selected = false;
+            });
+
+            ContextMenuStrip.Items.Add("将选中的条目移出收藏夹").Click += new EventHandler((object sender, EventArgs e) =>
+            {
+                foreach (ListViewItem item in SelectedItems)
+                {
+                    SmallImageList.Images.RemoveByKey(item.ImageKey);
+                    Favorites.Remove(item.Name);
+                    item.Remove();
+                }
+            });
+
             updateDebounceTimer.Tick += new EventHandler((object sender, EventArgs e) =>
             {
                 updateDebounceTimer.Stop();
                 StopUpdate();
             });
+        }
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x0204) // WM_RBUTTONDOWN
+            {
+                int x = m.LParam.ToInt32() & 0xFFFF;
+                int y = (m.LParam.ToInt32() >> 16) & 0xFFFF;
+
+                ListViewHitTestInfo hitInfo = this.HitTest(x, y);
+
+                if (hitInfo.Item == null)
+                {
+                    ContextMenuStrip.Show(this, x, y);
+                    return;
+                }
+            }
+
+            base.WndProc(ref m);
         }
         public bool Updating = false;
         public void StartUpdate()
