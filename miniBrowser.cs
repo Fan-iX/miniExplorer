@@ -10,16 +10,10 @@ using System.Diagnostics;
 using System.Collections.Generic;
 using Microsoft.VisualBasic.FileIO;
 using ShellApp;
-using System.Timers;
 using System.Reflection;
 
 namespace miniExplorer
 {
-    public class Global
-    {
-        // public static ShellContextMenu ctxMnu = new ShellContextMenu();
-    }
-
     public class Consts
     {
         public static readonly Dictionary<DragDropEffects, string> dragEffectDict = new Dictionary<DragDropEffects, string>()
@@ -552,8 +546,11 @@ namespace miniExplorer
             watcher.Deleted += new FileSystemEventHandler((object sender, FileSystemEventArgs e) =>
             {
                 ListViewFavorites lv = ListView as ListViewFavorites;
-                lv.RefreshLayoutLock();
-                Remove();
+                lv.BeginInvoke(new Action(() =>
+                {
+                    if (lv != null) lv.StartUpdate();
+                    Remove();
+                }));
             });
             watcher.Renamed += new RenamedEventHandler((object sender, RenamedEventArgs e) =>
             {
@@ -582,7 +579,7 @@ namespace miniExplorer
     {
         public BrowserForm Form { get => FindForm() as BrowserForm; }
         public List<string> Favorites { get => Properties.Settings.Default.Favorites; }
-        public System.Timers.Timer layoutLockTimer = new System.Timers.Timer(100);
+        public Timer updateDebounceTimer = new Timer() { Interval = 100 };
 
         public ListViewFavorites()
         {
@@ -705,6 +702,31 @@ namespace miniExplorer
                     }
                 }
             });
+            updateDebounceTimer.Tick += new EventHandler((object sender, EventArgs e) =>
+            {
+                updateDebounceTimer.Stop();
+                StopUpdate();
+            });
+        }
+        public bool Updating = false;
+        public void StartUpdate()
+        {
+            if (Updating)
+            {
+                updateDebounceTimer.Stop();
+                updateDebounceTimer.Start();
+            }
+            else
+            {
+                Updating = true;
+                BeginUpdate();
+                updateDebounceTimer.Start();
+            }
+        }
+        public void StopUpdate()
+        {
+            if (Updating) EndUpdate();
+            Updating = false;
         }
 
         public void ReloadImageList()
@@ -762,23 +784,14 @@ namespace miniExplorer
             }
         }
 
-        public void RefreshLayoutLock()
+        protected override void Dispose(bool disposing)
         {
-            if (!Updating)
+            if (disposing)
             {
-                BeginUpdate();
-                ElapsedEventHandler evh = null;
-                evh = new ElapsedEventHandler((object s, ElapsedEventArgs ev) =>
-                {
-                    EndUpdate();
-                    layoutLockTimer.Elapsed -= evh;
-                    layoutLockTimer.Stop();
-                });
-                layoutLockTimer.Elapsed += evh;
-                layoutLockTimer.Start();
+                updateDebounceTimer.Stop();
+                updateDebounceTimer.Dispose();
             }
-            layoutLockTimer.Stop();
-            layoutLockTimer.Start();
+            base.Dispose(disposing);
         }
     }
 
@@ -988,12 +1001,12 @@ namespace miniExplorer
                 }
             }
         }
-        public System.Timers.Timer layoutLockTimer = new System.Timers.Timer(100);
         public List<string> History = new List<string>();
         public BrowserForm Form { get => FindForm() as BrowserForm; }
         public ListViewDirectoryBrowser lvFolder = new ListViewDirectoryBrowser();
         public ListViewFileBrowser lvFile = new ListViewFileBrowser();
         public ImageList imgList = new ImageList();
+        public Timer refreshDebounceTimer = new Timer() { Interval = 100 };
 
         public FileSystemWatcher watcher = new FileSystemWatcher()
         {
@@ -1057,45 +1070,36 @@ namespace miniExplorer
             });
             watcher.Error += new ErrorEventHandler((object sender, ErrorEventArgs e) =>
             {
-                RefreshLayoutLock();
+                BeginInvoke(new Action(() => RefreshLayout()));
             });
             watcher.Deleted += new FileSystemEventHandler((object sender, FileSystemEventArgs e) =>
             {
-                RefreshLayoutLock();
+                BeginInvoke(new Action(() => RefreshLayout()));
             });
             watcher.Changed += new FileSystemEventHandler((object sender, FileSystemEventArgs e) =>
             {
-                RefreshLayoutLock();
+                BeginInvoke(new Action(() => RefreshLayout()));
             });
             watcher.Created += new FileSystemEventHandler((object sender, FileSystemEventArgs e) =>
             {
-                RefreshLayoutLock();
+                BeginInvoke(new Action(() => RefreshLayout()));
             });
             watcher.Renamed += new RenamedEventHandler((object sender, RenamedEventArgs e) =>
             {
-                RefreshLayoutLock();
+                BeginInvoke(new Action(() => RefreshLayout()));
+            });
+
+            refreshDebounceTimer.Tick += new EventHandler((object sender, EventArgs e) =>
+            {
+                refreshDebounceTimer.Stop();
+                UpdateListView();
+                ResizeWidget();
             });
         }
 
-        public void RefreshLayoutLock()
+        public void RefreshLayout()
         {
-            if (!Updating)
-            {
-                BeginUpdate();
-                ElapsedEventHandler evh = null;
-                evh = new ElapsedEventHandler((object s, ElapsedEventArgs ev) =>
-                {
-                    UpdateListView();
-                    ResizeWidget();
-                    EndUpdate();
-                    layoutLockTimer.Elapsed -= evh;
-                    layoutLockTimer.Stop();
-                });
-                layoutLockTimer.Elapsed += evh;
-                layoutLockTimer.Start();
-            }
-            layoutLockTimer.Stop();
-            layoutLockTimer.Start();
+            refreshDebounceTimer.Start();
         }
 
         public void ReloadImageList()
@@ -1216,19 +1220,6 @@ namespace miniExplorer
             UpdateListView();
             ResizeWidget();
             Form.UpdateText();
-        }
-        public bool Updating = false;
-        public void BeginUpdate()
-        {
-            Updating = true;
-            lvFolder.BeginUpdate();
-            lvFile.BeginUpdate();
-        }
-        public void EndUpdate()
-        {
-            lvFolder.EndUpdate();
-            lvFile.EndUpdate();
-            Updating = false;
         }
 
         private void lv_MouseUp(object sender, MouseEventArgs e)
@@ -1353,6 +1344,7 @@ namespace miniExplorer
                         FileSystemHelper.DeleteFileSystemItem(path, RecycleOption.DeletePermanently);
                     else
                         FileSystemHelper.DeleteFileSystemItem(path, RecycleOption.SendToRecycleBin);
+                    RefreshLayout();
                 }
             }
             else if (e.Alt && e.KeyCode == Keys.Up)
@@ -1373,8 +1365,9 @@ namespace miniExplorer
         {
             if (disposing)
             {
-                layoutLockTimer.Dispose();
                 watcher.Dispose();
+                refreshDebounceTimer.Stop();
+                refreshDebounceTimer.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -1465,6 +1458,7 @@ namespace miniExplorer
                     if (sourceName == destinationName) continue;
                     FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, Properties.Settings.Default.DropEffect);
                 }
+                container.RefreshLayout();
             });
             AfterLabelEdit += new LabelEditEventHandler((object sender, LabelEditEventArgs e) =>
             {
@@ -1542,6 +1536,7 @@ namespace miniExplorer
                     if (sourceName == destinationName) continue;
                     FileSystemHelper.OperateFileSystemItem(sourceName, destinationName, Properties.Settings.Default.DropEffect);
                 }
+                container.RefreshLayout();
             });
             AfterLabelEdit += new LabelEditEventHandler((object sender, LabelEditEventArgs e) =>
             {
@@ -1558,7 +1553,10 @@ namespace miniExplorer
                     if (Directory.Exists(sourceName))
                     {
                         if (File.Exists(destinationName))
+                        {
                             MessageBox.Show("指定的文件夹名与已存在的文件重名。请指定其他名称。", "重命名文件夹");
+                            e.CancelEdit = true;
+                        }
                         else if (!Directory.Exists(destinationName))
                         {
                             FileSystem.MoveDirectory(sourceName, destinationName, UIOption.AllDialogs, UICancelOption.DoNothing);

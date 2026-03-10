@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
-using System.Timers;
 
 namespace miniExplorer
 {
@@ -31,11 +30,11 @@ namespace miniExplorer
                 if (Foldable)
                 {
                     Unfold();
-                    System.Timers.Timer foldTimer = new System.Timers.Timer()
+                    Timer foldTimer = new Timer()
                     {
                         Interval = 100
                     };
-                    foldTimer.Elapsed += new ElapsedEventHandler((object s, ElapsedEventArgs ea) =>
+                    foldTimer.Tick += new EventHandler((object s, EventArgs ea) =>
                     {
                         if (!this.ClientRectangle.Contains(Cursor.Position))
                         {
@@ -152,19 +151,6 @@ namespace miniExplorer
                     break;
             }
         }
-
-        public bool Updating = false;
-
-        new void BeginUpdate()
-        {
-            Updating = true;
-            base.BeginUpdate();
-        }
-        new void EndUpdate()
-        {
-            base.EndUpdate();
-            Updating = false;
-        }
     }
 
     public class TabControlW : TabControl
@@ -193,22 +179,6 @@ namespace miniExplorer
                         return TabPages[i];
                 return null;
             }
-        }
-    }
-
-    public class OneTimeTimer : System.Timers.Timer
-    {
-        public Action DisposeAction;
-        public OneTimeTimer(double interval) : base(interval)
-        {
-            AutoReset = false;
-            Elapsed += new ElapsedEventHandler((object sender, ElapsedEventArgs e) =>
-            {
-                if (DisposeAction != null)
-                    DisposeAction();
-                Stop();
-                Dispose();
-            });
         }
     }
 }
