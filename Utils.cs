@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Drawing;
+using System.Diagnostics;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using Microsoft.VisualBasic.FileIO;
@@ -172,25 +173,57 @@ public class ShellApplicationHelper
                 output.Add(new Uri(locationURL).LocalPath);
             }
             Marshal.ReleaseComObject(window);
-        };
+        }
         Marshal.ReleaseComObject(windows);
         Marshal.ReleaseComObject(shellApplication);
         return output;
     }
 }
 
-public class TimeHelper
+public class IniHelper
 {
-    public static void SetTimeout(Action action, int delay)
+    [DllImport("kernel32", CharSet = CharSet.Unicode)]
+    private static extern int GetPrivateProfileString(string section, string key, string def, IntPtr retVal, int size, string filePath);
+
+    public static string GetValue(string file, string section, string key, string defaultValue = "")
     {
-        System.Timers.Timer timer = new System.Timers.Timer(delay);
-        timer.Elapsed += (object sender, System.Timers.ElapsedEventArgs e) =>
+        int bufferSize = 1024;
+        IntPtr buffer = Marshal.AllocCoTaskMem(bufferSize);
+        try
         {
-            action();
-            timer.Stop();
-            timer.Dispose();
-        };
-        timer.Start();
+            int len = GetPrivateProfileString(section, key, defaultValue, buffer, bufferSize, file);
+            return Marshal.PtrToStringUni(buffer, len);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(buffer);
+        }
+    }
+
+    public static string[] GetSections(string file)
+    {
+        return GetNames(file, null);
+    }
+
+    public static string[] GetKeys(string file, string section)
+    {
+        return GetNames(file, section);
+    }
+
+    private static string[] GetNames(string file, string section)
+    {
+        int bufferSize = 32768; // 32KB
+        IntPtr buffer = Marshal.AllocCoTaskMem(bufferSize);
+        try
+        {
+            int len = GetPrivateProfileString(section, null, null, buffer, bufferSize, file);
+            string allNames = Marshal.PtrToStringUni(buffer, len);
+            return allNames.Split(new char[] { '\0' }, StringSplitOptions.RemoveEmptyEntries);
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(buffer);
+        }
     }
 }
 
@@ -211,6 +244,25 @@ namespace miniExplorer
         public static int operator /(int pt, DpiFactor factor)
         {
             return (int)(pt / factor.scaling);
+        }
+    }
+    public class ProcessStartTemplate
+    {
+        public string FileName { get; set; }
+        public string ArgumentsTemplate { get; set; }
+
+        public void Start(params object[] args)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = FileName,
+                    Arguments = string.Format(ArgumentsTemplate, args),
+                    UseShellExecute = true
+                });
+            }
+            catch { }
         }
     }
 }

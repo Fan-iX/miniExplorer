@@ -172,6 +172,11 @@ namespace miniExplorer
                     if (Form != null)
                         Form.ActiveBrowser.UpdateListView();
                 });
+                ToolStripMenuItem cmsiUseExternal = (ToolStripMenuItem)Items.Add("启用外部事件回调");
+                cmsiUseExternal.Click += new EventHandler((object sender, EventArgs e) =>
+                {
+                    cmsiUseExternal.Checked = Properties.Settings.Default.UseExternal = !Properties.Settings.Default.UseExternal;
+                });
                 Closing += new ToolStripDropDownClosingEventHandler((object sender, ToolStripDropDownClosingEventArgs e) =>
                 {
                     if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked)
@@ -188,6 +193,7 @@ namespace miniExplorer
                         menuItem.Checked = (DragDropEffects)menuItem.Tag == Properties.Settings.Default.DropEffect;
                     }
                     cmsiShowHidden.Checked = Properties.Settings.Default.ShowHidden;
+                    cmsiUseExternal.Checked = Properties.Settings.Default.UseExternal;
                 });
             }
         }
@@ -223,6 +229,9 @@ namespace miniExplorer
         AdressBarButton btnBack = new AdressBarButton("←");
         AdressBarButton btnSettings = new AdressBarButton("=");
 
+        public Dictionary<string, ProcessStartTemplate> externalHandler = new Dictionary<string, ProcessStartTemplate>();
+        public Dictionary<Keys, ProcessStartTemplate> externalKeyHandler = new Dictionary<Keys, ProcessStartTemplate>();
+
         public BrowserForm()
         {
             MinimumSize = new Size(150 * DpiScale, 150 * DpiScale);
@@ -230,6 +239,36 @@ namespace miniExplorer
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("miniExplorer.Resources.miniExplorer.ico"))
             {
                 Icon = new Icon(stream);
+            }
+
+            string externalHandlerConfig = Path.ChangeExtension(Application.ExecutablePath, ".ini");
+            string[] sections = IniHelper.GetSections(externalHandlerConfig);
+            KeysConverter kc = new KeysConverter();
+            foreach (string s in sections)
+            {
+                string cmd = IniHelper.GetValue(externalHandlerConfig, s, "cmd", "");
+                string arguments = IniHelper.GetValue(externalHandlerConfig, s, "arguments", "{0}");
+                if (s.StartsWith("key:", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        Keys key = (Keys)kc.ConvertFromString(s.Substring(4));
+                        externalKeyHandler[key] = new ProcessStartTemplate()
+                        {
+                            FileName = cmd,
+                            ArgumentsTemplate = arguments,
+                        };
+                    }
+                    catch { }
+                }
+                else
+                {
+                    externalHandler[s.ToLower()] = new ProcessStartTemplate()
+                    {
+                        FileName = cmd,
+                        ArgumentsTemplate = arguments,
+                    };
+                }
             }
 
             tlpAddressBar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -670,6 +709,11 @@ namespace miniExplorer
             });
             KeyDown += new KeyEventHandler((object sender, KeyEventArgs e) =>
             {
+                if (FocusedItem != null && Properties.Settings.Default.UseExternal && Form.externalKeyHandler.ContainsKey(e.KeyData))
+                {
+                    Form.externalKeyHandler[e.KeyData].Start(FocusedItem.Name);
+                    return;
+                }
                 if (e.KeyCode == Keys.Delete)
                 {
                     foreach (ListViewItem item in SelectedItems)
@@ -681,24 +725,39 @@ namespace miniExplorer
                     Properties.Settings.Default.Save();
                 }
             });
+            KeyUp += new KeyEventHandler((object sender, KeyEventArgs e) =>
+            {
+                ListView lv = sender as ListView;
+                if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
+                {
+                    if (lv.FocusedItem != null && Properties.Settings.Default.UseExternal && Form.externalHandler.ContainsKey("focus"))
+                    {
+                        Form.externalHandler["focus"].Start(lv.FocusedItem.Name);
+                    }
+                }
+            });
             ItemDrag += new ItemDragEventHandler((object sender, ItemDragEventArgs e) =>
             {
-                List<string> paths = new List<string>();
-                foreach (ListViewItem item in SelectedItems)
-                    paths.Add(item.Name);
-                DataObject fileData = new DataObject(DataFormats.FileDrop, paths.ToArray());
+                string[] paths = SelectedItems.Cast<ListViewItem>().Select(x => x.Name).ToArray();
+                DataObject fileData = new DataObject(DataFormats.FileDrop, paths);
                 DoDragDrop(fileData, DragDropEffects.All);
             });
             MouseClick += new MouseEventHandler((object sender, MouseEventArgs e) =>
             {
+                ListView lv = sender as ListView;
                 if (e.Button == MouseButtons.Right)
                 {
-                    if (FocusedItem != null && FocusedItem.Bounds.Contains(e.Location))
+                    if (lv.FocusedItem != null && lv.FocusedItem.Bounds.Contains(e.Location))
                     {
-                        List<string> paths = new List<string>();
-                        foreach (ListViewItem item in SelectedItems)
-                            paths.Add(item.Name);
-                        Form.scmItemContextMenu.ShowContextMenu(paths.Select(x => new FileInfo(x)).ToArray(), this.PointToScreen(new Point(e.X, e.Y + 35)));
+                        FileInfo[] files = SelectedItems.Cast<ListViewItem>().Select(x => new FileInfo(x.Name)).ToArray();
+                        Form.scmItemContextMenu.ShowContextMenu(files, Cursor.Position);
+                    }
+                }
+                else if (e.Button == MouseButtons.Left)
+                {
+                    if (lv.FocusedItem.Selected && Properties.Settings.Default.UseExternal && Form.externalHandler.ContainsKey("focus"))
+                    {
+                        Form.externalHandler["focus"].Start(lv.FocusedItem.Name);
                     }
                 }
             });
@@ -1109,6 +1168,8 @@ namespace miniExplorer
             lvFile.MouseDown += new MouseEventHandler(lv_MouseDown);
             lvFolder.KeyDown += new KeyEventHandler(lv_KeyDown);
             lvFile.KeyDown += new KeyEventHandler(lv_KeyDown);
+            lvFolder.KeyDown += new KeyEventHandler(lv_KeyUp);
+            lvFile.KeyDown += new KeyEventHandler(lv_KeyUp);
 
             MouseDoubleClick += new MouseEventHandler((object sender, MouseEventArgs e) =>
             {
@@ -1285,20 +1346,23 @@ namespace miniExplorer
                 ListViewItem item = lv.GetItemAt(e.X, e.Y);
                 if (item != null)
                 {
-                    List<string> paths = new List<string>();
-                    foreach (ListViewItem selectedItem in SelectedItems)
-                    {
-                        paths.Add(selectedItem.Name);
-                    }
-                    Form.scmItemContextMenu.ShowContextMenu(paths.Select(x => new FileInfo(x)).ToArray(), Cursor.Position);
+                    FileInfo[] files = SelectedItems.Cast<ListViewItem>().Select(x => new FileInfo(x.Name)).ToArray();
+                    Form.scmItemContextMenu.ShowContextMenu(files, Cursor.Position);
                 }
             }
-            else if (e.Button == MouseButtons.Left && !ModifierKeys.HasFlag(Keys.Control))
+            else if (e.Button == MouseButtons.Left)
             {
-                if (lv == lvFolder)
-                    lvFile.SelectedItems.Clear();
-                if (lv == lvFile)
-                    lvFolder.SelectedItems.Clear();
+                if (lv.FocusedItem.Selected && Properties.Settings.Default.UseExternal && Form.externalHandler.ContainsKey("focus"))
+                {
+                    Form.externalHandler["focus"].Start(lv.FocusedItem.Name);
+                }
+                if (!ModifierKeys.HasFlag(Keys.Control))
+                {
+                    if (lv == lvFolder)
+                        lvFile.SelectedItems.Clear();
+                    if (lv == lvFile)
+                        lvFolder.SelectedItems.Clear();
+                }
             }
         }
 
@@ -1324,18 +1388,19 @@ namespace miniExplorer
 
         private void lv_ItemDrag(object sender, ItemDragEventArgs e)
         {
-            List<string> paths = new List<string>();
-            foreach (ListViewItem item in SelectedItems)
-            {
-                paths.Add(item.Name);
-            }
-            DataObject fileData = new DataObject(DataFormats.FileDrop, paths.ToArray());
+            string[] paths = SelectedItems.Cast<ListViewItem>().Select(x => x.Name).ToArray();
+            DataObject fileData = new DataObject(DataFormats.FileDrop, paths);
             DoDragDrop(fileData, Properties.Settings.Default.DragEffect);
         }
 
         private void lv_KeyDown(object sender, KeyEventArgs e)
         {
             ListView lv = sender as ListView;
+            if (lv.FocusedItem != null && Properties.Settings.Default.UseExternal && Form.externalKeyHandler.ContainsKey(e.KeyData))
+            {
+                Form.externalKeyHandler[e.KeyData].Start(lv.FocusedItem.Name);
+                return;
+            }
             if (e.Control && e.KeyCode == Keys.V)
             {
                 StringCollection dropList = Clipboard.GetFileDropList();
@@ -1404,6 +1469,18 @@ namespace miniExplorer
             else if (e.KeyCode == Keys.F2 && lv.SelectedItems.Count > 0)
             {
                 lv.FocusedItem.BeginEdit();
+            }
+        }
+
+        private void lv_KeyUp(object sender, KeyEventArgs e)
+        {
+            ListView lv = sender as ListView;
+            if (e.KeyCode == Keys.Up || e.KeyCode == Keys.Down)
+            {
+                if (lv.FocusedItem != null && Properties.Settings.Default.UseExternal && Form.externalHandler.ContainsKey("focus"))
+                {
+                    Form.externalHandler["focus"].Start(lv.FocusedItem.Name);
+                }
             }
         }
 

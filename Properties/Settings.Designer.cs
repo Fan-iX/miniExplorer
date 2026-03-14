@@ -152,6 +152,21 @@
 
         [global::System.Configuration.UserScopedSettingAttribute()]
         [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("true")]
+        public bool UseExternal
+        {
+            get
+            {
+                return ((bool)(this["UseExternal"]));
+            }
+            set
+            {
+                this["UseExternal"] = value;
+            }
+        }
+
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
         [global::System.Configuration.DefaultSettingValueAttribute("false")]
         public bool ShowFavorites
         {
