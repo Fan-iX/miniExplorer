@@ -12,7 +12,7 @@ using Microsoft.VisualBasic.FileIO;
 using ShellApp;
 using System.Reflection;
 
-namespace miniExplorer
+namespace MiniExplorer
 {
     public class Consts
     {
@@ -236,7 +236,7 @@ namespace miniExplorer
         {
             MinimumSize = new Size(150 * DpiScale, 150 * DpiScale);
             KeyPreview = true;
-            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("miniExplorer.Resources.miniExplorer.ico"))
+            using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("MiniExplorer.Resources.MiniExplorer.ico"))
             {
                 Icon = new Icon(stream);
             }

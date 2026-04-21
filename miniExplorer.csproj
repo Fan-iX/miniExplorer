@@ -7,11 +7,11 @@
     <PublishDir>bin\Publish</PublishDir>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Resources\miniExplorer.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\MiniExplorer.ico</ApplicationIcon>
     <AppDesignerFolder>Properties</AppDesignerFolder>
   </PropertyGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Resources\miniExplorer.ico" />
+    <EmbeddedResource Include="Resources\MiniExplorer.ico" />
     <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System.Configuration" />
   </ItemGroup>

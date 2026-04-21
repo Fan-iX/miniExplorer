@@ -3,7 +3,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 
-namespace miniExplorer
+namespace MiniExplorer
 {
     public class PocketForm : Form
     {

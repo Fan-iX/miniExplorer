@@ -228,7 +228,7 @@ public class IniHelper
 }
 
 
-namespace miniExplorer
+namespace MiniExplorer
 {
     public class DpiFactor
     {

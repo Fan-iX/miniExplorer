@@ -1,4 +1,4 @@
-# miniExploer
+# MiniExplorer
 
 A mini file browser based on .net framework winforms
 
@@ -10,7 +10,7 @@ Run
 dotnet publish
 ```
 
-And you will see stand alone executable file in `bin\Publish\miniExplorer.exe`
+And you will see stand alone executable file in `bin\Publish\MiniExplorer.exe`
 
 ## Features
 
