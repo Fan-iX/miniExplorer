@@ -376,12 +376,13 @@ namespace miniExplorer
                 }
             }
 
-            if (Environment.GetCommandLineArgs().Length > 1)
+            if (Program.Args.Length > 0)
             {
                 Properties.Settings.Default.SelectedIndex = 0;
-                foreach (string path in Environment.GetCommandLineArgs().Skip(1))
+                foreach (string arg in Program.Args)
                 {
-                    tcBrowser.AddBrowser(path);
+                    if (arg.StartsWith("-")) continue;
+                    tcBrowser.AddBrowser(arg);
                 }
             }
             if (Properties.Settings.Default.TabPaths.Count == 0)
@@ -552,7 +553,28 @@ namespace miniExplorer
             Properties.Settings.Default.WindowLocation = Location;
             Properties.Settings.Default.ShowFavorites = !scFavorites.Panel1Collapsed;
             Properties.Settings.Default.Save();
+            if (Program.IsPrimaryInstance && e.CloseReason == CloseReason.UserClosing && Control.ModifierKeys != Keys.Alt)
+            {
+                e.Cancel = true;
+                this.Hide();
+                return;
+            }
             base.OnFormClosing(e);
+        }
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == Program.WM_ME_SHOW)
+            {
+                if (Program.IsPrimaryInstance)
+                {
+                    this.Show();
+                }
+                else
+                {
+                    m.Result = new IntPtr(1);
+                }
+            }
+            base.WndProc(ref m);
         }
 
         private void ResizeWidget()

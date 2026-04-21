@@ -1,4 +1,6 @@
 using System;
+using System.Linq;
+using System.Threading;
 using System.Configuration;
 using System.Windows.Forms;
 using System.Collections.Specialized;
@@ -8,12 +10,38 @@ namespace miniExplorer
 {
     static class Program
     {
+        public static readonly uint WM_ME_SHOW = RegisterWindowMessage("MINI_EXPLORER_SHOW_MSG");
         public static BrowserForm browser;
+        public static bool IsPrimaryInstance = !Environment.GetCommandLineArgs().Contains("-multi", StringComparer.OrdinalIgnoreCase);
+        public static string[] Args;
         /// <summary>
         ///  The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
+        {
+            Args = args.Where(a => !a.StartsWith("-")).ToArray();
+            bool createNew;
+            if (IsPrimaryInstance)
+            {
+                using (Mutex mutex = new Mutex(true, "MiniExplorer", out createNew))
+                {
+                    if (createNew)
+                    {
+                        RunApp();
+                    }
+                    else
+                    {
+                        SendMessage((IntPtr)0xffff, WM_ME_SHOW, IntPtr.Zero, IntPtr.Zero);
+                    }
+                }
+            }
+            else
+            {
+                RunApp();
+            }
+        }
+        static void RunApp()
         {
             NameValueCollection section = ConfigurationManager.GetSection("System.Windows.Forms.ApplicationConfigurationSection") as NameValueCollection;
             if (section != null)
@@ -27,9 +55,10 @@ namespace miniExplorer
             Application.Run(browser);
         }
 
-        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto)]
-        public static extern void OutputDebugString(string message);
-
+        [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+        private static extern uint RegisterWindowMessage(string lpString);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
         public class MouseMoveFilter : IMessageFilter
         {
             bool mouseOut = true;
